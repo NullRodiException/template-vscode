@@ -1,0 +1,225 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Linx Liquid",
+  "scopeName": "text.html.linx-liquid",
+  "patterns": [
+    { "include": "#liquid-comment" },
+    { "include": "#raw-block" },
+    { "include": "#liquid-tag" },
+    { "include": "#liquid-output" },
+    { "include": "text.html.basic" }
+  ],
+  "repository": {
+    "liquid-comment": {
+      "comment": "Região opaca: em register.template:42-47 há um par capture/endcapture inteiro aqui dentro que não pode contar para nada.",
+      "name": "comment.block.liquid",
+      "begin": "(\\{%-?)\\s*(comment)\\s*(-?%\\})",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.liquid" },
+        "2": { "name": "keyword.control.liquid" },
+        "3": { "name": "punctuation.definition.tag.end.liquid" }
+      },
+      "end": "(\\{%-?)\\s*(endcomment)\\s*(-?%\\})",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.liquid" },
+        "2": { "name": "keyword.control.liquid" },
+        "3": { "name": "punctuation.definition.tag.end.liquid" }
+      }
+    },
+
+    "raw-block": {
+      "comment": "Dentro de raw os {{ }} são mustaches do Vue, não Liquid. O contentName é o gancho da injeção raw-escape, que alcança os {% endraw %} presos dentro de strings de atributo.",
+      "begin": "(\\{%-?)\\s*(raw)\\s*(-?%\\})",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.liquid" },
+        "2": { "name": "keyword.control.raw.liquid" },
+        "3": { "name": "punctuation.definition.tag.end.liquid" }
+      },
+      "end": "(\\{%-?)\\s*(endraw)\\s*(-?%\\})",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.liquid" },
+        "2": { "name": "keyword.control.raw.liquid" },
+        "3": { "name": "punctuation.definition.tag.end.liquid" }
+      },
+      "contentName": "meta.embedded.block.raw.linx",
+      "patterns": [
+        { "include": "#vue-mustache" },
+        { "include": "text.html.basic" }
+      ]
+    },
+
+    "vue-mustache": {
+      "name": "meta.embedded.expression.vue",
+      "begin": "(\\{\\{)",
+      "beginCaptures": { "1": { "name": "punctuation.definition.interpolation.begin.vue" } },
+      "end": "(\\}\\})",
+      "endCaptures": { "1": { "name": "punctuation.definition.interpolation.end.vue" } },
+      "patterns": [
+        { "include": "#vue-filter" },
+        { "include": "source.js" }
+      ]
+    },
+
+    "vue-filter": {
+      "comment": "O lookaround distingue o filtro Vue `| currency` do `||` do JavaScript, que ocorre em order-summary.template:120.",
+      "match": "(?<!\\|)(\\|)(?!\\|)\\s*([a-zA-Z_]\\w*)",
+      "captures": {
+        "1": { "name": "keyword.operator.filter.vue" },
+        "2": { "name": "support.function.filter.vue" }
+      }
+    },
+
+    "liquid-tag": {
+      "patterns": [
+        { "include": "#linx-tag" },
+        { "include": "#liquid-standard-tag" },
+        { "include": "#liquid-generic-tag" }
+      ]
+    },
+
+    "linx-tag": {
+      "comment": "As 12 tags proprietárias da Linx. Ordem importa: os prefixos mais longos vêm primeiro.",
+      "name": "meta.tag.custom.linx.liquid",
+      "begin": "(\\{%-?)\\s*(metadata_component|metadata_for|browsing_context_data|browsing_context|profile_register|page_assets|page_snippets|page_speed|system_recaptcha_v3|google_analytics|google_tag_manager_newversion|google_tag_manager)\\b",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.liquid" },
+        "2": { "name": "support.function.linx.liquid" }
+      },
+      "end": "(-?%\\})",
+      "endCaptures": { "1": { "name": "punctuation.definition.tag.end.liquid" } },
+      "patterns": [
+        { "include": "#linx-tag-args" },
+        { "include": "#liquid-expression" }
+      ]
+    },
+
+    "linx-tag-args": {
+      "comment": "Separador híbrido: Nome:expr, Nome=\"str\" e nome=bool coexistem no mesmo corpus.",
+      "begin": "(\\()",
+      "beginCaptures": { "1": { "name": "punctuation.section.arguments.begin.liquid" } },
+      "end": "(\\))",
+      "endCaptures": { "1": { "name": "punctuation.section.arguments.end.liquid" } },
+      "patterns": [
+        {
+          "match": "([A-Za-z_]\\w*)\\s*([:=])",
+          "captures": {
+            "1": { "name": "variable.parameter.linx.liquid" },
+            "2": { "name": "punctuation.separator.key-value.liquid" }
+          }
+        },
+        { "include": "#liquid-expression" }
+      ]
+    },
+
+    "liquid-standard-tag": {
+      "name": "meta.tag.liquid",
+      "begin": "(\\{%-?)\\s*(endif|endunless|endfor|endcapture|endcase|endtablerow|endform|endpaginate|endraw|endcomment|if|unless|elsif|else|for|capture|case|when|assign|include|render|layout|section|echo|increment|decrement|break|continue|cycle|tablerow|liquid|form|paginate)\\b",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.liquid" },
+        "2": { "name": "keyword.control.liquid" }
+      },
+      "end": "(-?%\\})",
+      "endCaptures": { "1": { "name": "punctuation.definition.tag.end.liquid" } },
+      "patterns": [
+        { "include": "#include-path" },
+        { "include": "#liquid-expression" }
+      ]
+    },
+
+    "liquid-generic-tag": {
+      "comment": "Fallback para qualquer tag futura da Linx que ainda não esteja na lista.",
+      "name": "meta.tag.liquid",
+      "begin": "(\\{%-?)\\s*([a-zA-Z_]\\w*)?",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.liquid" },
+        "2": { "name": "entity.name.tag.liquid" }
+      },
+      "end": "(-?%\\})",
+      "endCaptures": { "1": { "name": "punctuation.definition.tag.end.liquid" } },
+      "patterns": [
+        { "include": "#linx-tag-args" },
+        { "include": "#liquid-expression" }
+      ]
+    },
+
+    "include-path": {
+      "comment": "{% include /Pages/OnePageCheckout/components/basket %} — caminho sem aspas e sem extensão.",
+      "match": "(?<=\\s)(/[\\w./~-]+)",
+      "captures": { "1": { "name": "string.unquoted.path.liquid" } }
+    },
+
+    "liquid-output": {
+      "name": "meta.embedded.expression.liquid",
+      "begin": "(\\{\\{-?)",
+      "beginCaptures": { "1": { "name": "punctuation.definition.interpolation.begin.liquid" } },
+      "end": "(-?\\}\\})",
+      "endCaptures": { "1": { "name": "punctuation.definition.interpolation.end.liquid" } },
+      "patterns": [{ "include": "#liquid-expression" }]
+    },
+
+    "liquid-expression": {
+      "patterns": [
+        { "include": "#liquid-string" },
+        { "include": "#liquid-filter" },
+        { "include": "#liquid-operator" },
+        { "include": "#liquid-constant" },
+        { "include": "#liquid-number" },
+        { "include": "#liquid-variable" }
+      ]
+    },
+
+    "liquid-string": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.liquid",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [{ "match": "\\\\.", "name": "constant.character.escape.liquid" }]
+        },
+        {
+          "comment": "Aspas simples podem conter aspas duplas: where:'Items.Any(it.Provider == \"ADYEN\")' e escapes: replace: '\\*', 'X'.",
+          "name": "string.quoted.single.liquid",
+          "begin": "'",
+          "end": "'",
+          "patterns": [{ "match": "\\\\.", "name": "constant.character.escape.liquid" }]
+        }
+      ]
+    },
+
+    "liquid-filter": {
+      "match": "(?<!\\|)(\\|)(?!\\|)\\s*([a-zA-Z_]\\w*)",
+      "captures": {
+        "1": { "name": "keyword.operator.filter.liquid" },
+        "2": { "name": "support.function.filter.liquid" }
+      }
+    },
+
+    "liquid-operator": {
+      "comment": "&& não é Liquid padrão, mas o dialeto aceita: PageHeader.template:5.",
+      "match": "(==|!=|>=|<=|&&|\\|\\||>|<|=)|\\b(and|or|not|contains)\\b",
+      "captures": {
+        "1": { "name": "keyword.operator.comparison.liquid" },
+        "2": { "name": "keyword.operator.logical.liquid" }
+      }
+    },
+
+    "liquid-constant": {
+      "comment": "O dialeto usa null (C#), não nil (Shopify).",
+      "match": "\\b(true|false|null|nil|empty|blank)\\b",
+      "name": "constant.language.liquid"
+    },
+
+    "liquid-number": {
+      "match": "\\b\\d+(\\.\\d+)?\\b",
+      "name": "constant.numeric.liquid"
+    },
+
+    "liquid-variable": {
+      "match": "\\b([A-Za-z_]\\w*)((?:\\.\\w+)*)",
+      "captures": {
+        "1": { "name": "variable.other.liquid" },
+        "2": { "name": "variable.other.property.liquid" }
+      }
+    }
+  }
+}

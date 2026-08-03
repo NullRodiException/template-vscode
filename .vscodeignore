@@ -1,0 +1,11 @@
+ex/**
+src/**
+test/**
+out/**
+node_modules/**
+.vscode/**
+esbuild.mjs
+tsconfig.json
+**/*.map
+**/*.ts
+!dist/extension.cjs

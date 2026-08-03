@@ -1,0 +1,37 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Linx Liquid — escape de raw",
+  "scopeName": "linx-liquid.injection.raw-escape",
+  "injectionSelector": "L:meta.embedded.block.raw.linx",
+  "patterns": [{ "include": "#raw-escape" }],
+  "repository": {
+    "raw-escape": {
+      "comment": [
+        "Um par {% endraw %} … {% raw %} na MESMA linha é um 'furo' de Liquid ativo dentro da região raw.",
+        "Existe no meio de valores de atributo — wd.checkout.onepage.template:31 e delivery-addresses.template:51 —",
+        "onde o `end` do raw-block da gramática principal não é testado, porque o scanner está dentro da sub-regra",
+        "de string do text.html.basic. Só uma injeção alcança lá dentro.",
+        "O lookahead exigindo o {% raw %} na mesma linha é o que impede esta regra de sequestrar o {% endraw %}",
+        "que legitimamente fecha o bloco (register.template:40 → 108, e o fim de todo arquivo envolto em raw)."
+      ],
+      "begin": "(\\{%-?)\\s*(endraw)\\s*(-?%\\})(?=[^\\n]*\\{%-?\\s*raw\\s*-?%\\})",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.liquid" },
+        "2": { "name": "keyword.control.raw.liquid" },
+        "3": { "name": "punctuation.definition.tag.end.liquid" }
+      },
+      "end": "(\\{%-?)\\s*(raw)\\s*(-?%\\})",
+      "endCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.liquid" },
+        "2": { "name": "keyword.control.raw.liquid" },
+        "3": { "name": "punctuation.definition.tag.end.liquid" }
+      },
+      "contentName": "meta.embedded.block.liquid-escape.linx",
+      "patterns": [
+        { "include": "text.html.linx-liquid#liquid-comment" },
+        { "include": "text.html.linx-liquid#liquid-tag" },
+        { "include": "text.html.linx-liquid#liquid-output" }
+      ]
+    }
+  }
+}

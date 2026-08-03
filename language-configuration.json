@@ -1,0 +1,63 @@
+{
+  "comments": {
+    "blockComment": ["{% comment %}", "{% endcomment %}"]
+  },
+  "brackets": [
+    ["<!--", "-->"],
+    ["<", ">"],
+    ["{", "}"],
+    ["(", ")"],
+    ["{%", "%}"],
+    ["{{", "}}"]
+  ],
+  "autoClosingPairs": [
+    { "open": "{% ", "close": " %}" },
+    { "open": "{{ ", "close": " }}" },
+    { "open": "{", "close": "}" },
+    { "open": "[", "close": "]" },
+    { "open": "(", "close": ")" },
+    { "open": "'", "close": "'", "notIn": ["string", "comment"] },
+    { "open": "\"", "close": "\"", "notIn": ["string"] },
+    { "open": "<!--", "close": "-->", "notIn": ["comment", "string"] }
+  ],
+  "surroundingPairs": [
+    ["{", "}"],
+    ["[", "]"],
+    ["(", ")"],
+    ["'", "'"],
+    ["\"", "\""],
+    ["<", ">"]
+  ],
+  "autoCloseBefore": ";:.,=}])><`'\" \n\t",
+  "wordPattern": "(-?\\d*\\.\\d\\w*)|([^\\`\\~\\!\\@\\$\\^\\&\\*\\(\\)\\=\\+\\[\\{\\]\\}\\\\\\|\\;\\:\\'\\\"\\,\\.\\<\\>\\/\\s]+)",
+  "indentationRules": {
+    "increaseIndentPattern": "<(?!\\?|area\\b|base\\b|br\\b|col\\b|embed\\b|hr\\b|img\\b|input\\b|link\\b|meta\\b|param\\b|source\\b|track\\b|wbr\\b|script\\b|style\\b|!)([a-zA-Z][\\w:.-]*)(?:\\s[^<>]*)?>\\s*$|\\{%-?\\s*(if|unless|for|capture|case|tablerow|form|paginate)\\b(?![^%]*\\{%-?\\s*end)",
+    "decreaseIndentPattern": "^\\s*(?:</[a-zA-Z][\\w:.-]*\\s*>|-->|\\{%-?\\s*(?:end(?:if|unless|for|capture|case|tablerow|form|paginate)|else|elsif|when)\\b)"
+  },
+  "onEnterRules": [
+    {
+      "beforeText": "\\{%-?\\s*(?:if|unless|for|capture|case|tablerow)\\b[^%]*-?%\\}\\s*$",
+      "afterText": "^\\s*\\{%-?\\s*end(?:if|unless|for|capture|case|tablerow)\\b",
+      "action": { "indent": "indentOutdent" }
+    },
+    {
+      "beforeText": "\\{%-?\\s*(?:if|unless|for|capture|case|tablerow|else|elsif|when)\\b[^%]*-?%\\}\\s*$",
+      "action": { "indent": "indent" }
+    },
+    {
+      "beforeText": "<(?!area\\b|base\\b|br\\b|col\\b|embed\\b|hr\\b|img\\b|input\\b|link\\b|meta\\b|param\\b|source\\b|track\\b|wbr\\b)([a-zA-Z][\\w:.-]*)(?:\\s[^<>]*)?>\\s*$",
+      "afterText": "^\\s*</([a-zA-Z][\\w:.-]*)\\s*>",
+      "action": { "indent": "indentOutdent" }
+    },
+    {
+      "beforeText": "^\\s*<!--(?!.*-->)",
+      "action": { "indent": "none", "appendText": "     " }
+    }
+  ],
+  "folding": {
+    "markers": {
+      "start": "^\\s*(?:<!--\\s*#region\\b|\\{%-?\\s*(?:raw|comment)\\s*-?%\\})",
+      "end": "^\\s*(?:<!--\\s*#endregion\\b|\\{%-?\\s*(?:endraw|endcomment)\\s*-?%\\})"
+    }
+  }
+}

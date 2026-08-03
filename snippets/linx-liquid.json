@@ -1,0 +1,141 @@
+{
+  "Componente Vue novo": {
+    "prefix": "lxcomponent",
+    "body": [
+      "{% raw %}",
+      "<template id=\"tpl-${1:nome}\">",
+      "\t<section id=\"${1:nome}\" class=\"flex flex-col gap-4\">",
+      "\t\t$0",
+      "\t</section>",
+      "</template>",
+      "{% endraw %}"
+    ],
+    "description": "Esqueleto de componente: {% raw %} + <template id=\"tpl-X\">. O X precisa bater com o Vue.component('X') do .js correspondente."
+  },
+
+  "raw": {
+    "prefix": "raw",
+    "body": ["{% raw %}", "$0", "{% endraw %}"],
+    "description": "Bloco raw: dentro dele os {{ }} são mustaches do Vue e o Liquid não é processado."
+  },
+  "if": {
+    "prefix": "if",
+    "body": ["{% if ${1:condicao} %}", "\t$0", "{% endif %}"],
+    "description": "Condicional. O dialeto aceita and/or e também && do C#, e usa null em vez de nil."
+  },
+  "ifelse": {
+    "prefix": "ifelse",
+    "body": ["{% if ${1:condicao} %}", "\t$2", "{% else %}", "\t$0", "{% endif %}"],
+    "description": "Condicional com else."
+  },
+  "unless": {
+    "prefix": "unless",
+    "body": ["{% unless ${1:condicao} %}", "\t$0", "{% endunless %}"],
+    "description": "Condicional negada."
+  },
+  "for": {
+    "prefix": "for",
+    "body": ["{% for ${1:item} in ${2:colecao} %}", "\t$0", "{% endfor %}"],
+    "description": "Laço. Dentro dele, forloop.last é útil para separar itens por vírgula em JSON."
+  },
+  "forjson": {
+    "prefix": "forjson",
+    "body": [
+      "{% for ${1:item} in ${2:colecao} %}",
+      "{",
+      "\t$0",
+      "}{% unless forloop.last %},{% endunless %}",
+      "{% endfor %}"
+    ],
+    "description": "Laço gerando um array JSON dentro de <script>, com a vírgula suprimida no último item."
+  },
+  "assign": {
+    "prefix": "assign",
+    "body": ["{% assign ${1:nome} = ${2:valor} %}"],
+    "description": "Atribuição."
+  },
+  "capture": {
+    "prefix": "capture",
+    "body": ["{% capture ${1:nome} %}", "\t$0", "{% endcapture %}"],
+    "description": "Captura a saída de um bloco numa variável."
+  },
+  "comment": {
+    "prefix": "comment",
+    "body": ["{% comment %}", "$0", "{% endcomment %}"],
+    "description": "Comentário Liquid. É o único que desativa código do servidor — mas não funciona dentro de {% raw %}."
+  },
+  "include": {
+    "prefix": "include",
+    "body": ["{% include /Pages/${1:OnePageCheckout}/${2:components}/${3:nome} %}"],
+    "description": "Inclui outro template. O caminho é absoluto a partir da raiz do tema, sem aspas e sem a extensão .template."
+  },
+
+  "metadata_component": {
+    "prefix": "metadata_component",
+    "body": [
+      "{% metadata_component(Entity:${1:entity}, Except:${2:fieldsBlocked}, Order:${3:Widget.FieldsOrderDisplayedToPerson}) %}"
+    ],
+    "description": "Popula Metadata.MetadataComponentProperties com os campos da entidade."
+  },
+  "metadata_for": {
+    "prefix": "metadata_for",
+    "body": [
+      "{% metadata_for(Entity=\"${1:Address}\", Only=\"${2:State}\", template=\"~/Custom/Content/Widgets/${3:checkout.onepage}/helpers/${4:input}\") %}"
+    ],
+    "description": "Renderiza um template para campos específicos de uma entidade. O template usa caminho de deploy."
+  },
+  "profile_register": {
+    "prefix": "profile_register",
+    "body": [
+      "{% profile_register(Entity:${1:entity}, template=\"~/Custom/Content/Widgets/${2:checkout.onepage}/helpers/register.template\") %}"
+    ],
+    "description": "Renderiza o template de cadastro da entidade."
+  },
+  "browsing_context": {
+    "prefix": "browsing_context",
+    "body": ["{% browsing_context(forceScript=${1|false,true|}) %}"],
+    "description": "Emite o contexto de navegação da sessão."
+  },
+  "browsing_context_data": {
+    "prefix": "browsing_context_data",
+    "body": ["{% browsing_context_data(Template=\"${1:data.basket.item.template}\") %}"],
+    "description": "Emite os dados do contexto usando um template interno da plataforma."
+  },
+  "page_assets": {
+    "prefix": "page_assets",
+    "body": ["{% page_assets '${1|PageJavaScript,StaticJavaScript,StaticHeaderJavaScript|}' %}"],
+    "description": "Injeta os assets registrados para o slot."
+  },
+  "page_snippets": {
+    "prefix": "page_snippets",
+    "body": ["{% page_snippets '${1|footer,header|}' %}"],
+    "description": "Injeta os snippets cadastrados no painel para o slot."
+  },
+  "google_tag_manager": {
+    "prefix": "google_tag_manager",
+    "body": [
+      "{% if Config.General.Store.GoogleTagManagerWidgetVersion == \"V2\" %}",
+      "\t{% google_tag_manager_newversion(ContainerId:Config.General.Store.GoogleTagManager) %}",
+      "{% else %}",
+      "\t{% google_tag_manager(ContainerId:Config.General.Store.GoogleTagManager) %}",
+      "{% endif %}"
+    ],
+    "description": "GTM com a escolha entre as duas versões, como em includes/PageFooter.template."
+  },
+
+  "themepath": {
+    "prefix": "themepath",
+    "body": ["{{ '${1:/Pages/OnePageCheckout/Scripts/main.js}' | themepath }}"],
+    "description": "Resolve um caminho de fonte (igual ao da árvore local) para a URL pública."
+  },
+  "contentpath": {
+    "prefix": "contentpath",
+    "body": ["{{ '${1:Widgets/checkout.onepage/Styles/tailwind.css}' | contentpath }}"],
+    "description": "Resolve um caminho de deploy (Widgets/<folder>/...) para a URL do CDN."
+  },
+  "json": {
+    "prefix": "json",
+    "body": ["{{ ${1:Basket} | json }}"],
+    "description": "Serializa um objeto do servidor como JSON, para consumo pelo Vue."
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Linx Liquid — Liquid em contextos aninhados",
+  "scopeName": "linx-liquid.injection.liquid",
+  "injectionSelector": "L:text.html.linx-liquid -meta.embedded.block.raw.linx -comment.block.liquid",
+  "comment": [
+    "As regras da gramática principal só alcançam o Liquid que está no nível do documento.",
+    "Assim que o text.html.basic entra numa sub-regra — string de atributo, comentário HTML — ou",
+    "o source.js assume dentro de um <script>, o scanner fica preso lá e o Liquid deixa de ser visto.",
+    "No corpus isso é a regra, não a exceção:",
+    "  helpers/input.template:17  v-mask=\"'{{ property.InputMask | replace: '9', '#' }}'\"",
+    "  components/register.template:75  v-model=\"AddOrSetCustomer.{{ field.PropertyName }}\"",
+    "  includes/PageHeader.template:120  {% for %} gerando array JSON dentro do <script>",
+    "  includes/PageHeader.template:72  {{ '…' | contentpath }} dentro de string JS",
+    "Esta injeção reconhece Liquid em qualquer profundidade, fora de raw e fora de {% comment %}.",
+    "raw/endraw/comment/endcomment ficam de fora do begin: são as tags que delimitam as regiões da",
+    "gramática principal, e capturá-las aqui impediria essas regiões de existir."
+  ],
+  "patterns": [
+    { "include": "#injected-tag" },
+    { "include": "text.html.linx-liquid#liquid-output" }
+  ],
+  "repository": {
+    "injected-tag": {
+      "name": "meta.tag.liquid",
+      "comment": "O lookahead vem colado ao {% e engloba o \\s*: se ficasse depois do \\s*, o backtracking casaria \\s* com zero espaços e a negação escaparia — capturando o {% raw %} e impedindo a região raw de existir.",
+      "begin": "(\\{%-?)(?!\\s*(?:raw|endraw|comment|endcomment)\\b)\\s*([a-zA-Z_]\\w*)?",
+      "beginCaptures": {
+        "1": { "name": "punctuation.definition.tag.begin.liquid" },
+        "2": {
+          "comment": "Sem âncoras ^$: dentro de um capture elas se referem à linha inteira, não ao texto capturado, e como o {% quase nunca está na coluna 0 elas nunca casariam — todas as tags cairiam no fallback. \\b basta porque o capture é exatamente um identificador; e como _ é caractere de palavra, google_tag_manager\\b não casa em google_tag_manager_newversion.",
+          "patterns": [
+            {
+              "match": "\\b(?:metadata_component|metadata_for|browsing_context_data|browsing_context|profile_register|page_assets|page_snippets|page_speed|system_recaptcha_v3|google_analytics|google_tag_manager_newversion|google_tag_manager)\\b",
+              "name": "support.function.linx.liquid"
+            },
+            {
+              "match": "\\b(?:endif|endunless|endfor|endcapture|endcase|endtablerow|endform|endpaginate|if|unless|elsif|else|for|capture|case|when|assign|include|render|layout|section|echo|increment|decrement|break|continue|cycle|tablerow|liquid|form|paginate)\\b",
+              "name": "keyword.control.liquid"
+            },
+            { "match": "\\w+", "name": "entity.name.tag.liquid" }
+          ]
+        }
+      },
+      "end": "(-?%\\})",
+      "endCaptures": { "1": { "name": "punctuation.definition.tag.end.liquid" } },
+      "patterns": [
+        { "include": "text.html.linx-liquid#linx-tag-args" },
+        { "include": "text.html.linx-liquid#include-path" },
+        { "include": "text.html.linx-liquid#liquid-expression" }
+      ]
+    }
+  }
+}

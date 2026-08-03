@@ -1,0 +1,157 @@
+{
+  "name": "linx-liquid-template",
+  "displayName": "Linx Liquid Template",
+  "description": "Suporte a arquivos .template do Liquid da Linx Commerce: highlight, indentação, comentar bloco, navegação e diagnósticos.",
+  "version": "0.1.0",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Formatters",
+    "Snippets",
+    "Linters"
+  ],
+  "keywords": [
+    "liquid",
+    "linx",
+    "template",
+    "vue",
+    "e-commerce"
+  ],
+  "main": "./dist/extension.cjs",
+  "contributes": {
+    "languages": [
+      {
+        "id": "linx-liquid",
+        "aliases": [
+          "Linx Liquid",
+          "linx-liquid"
+        ],
+        "extensions": [
+          ".template"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "linx-liquid",
+        "scopeName": "text.html.linx-liquid",
+        "path": "./syntaxes/linx-liquid.tmLanguage.json",
+        "embeddedLanguages": {
+          "source.js": "javascript",
+          "source.css": "css",
+          "meta.embedded.block.html": "html"
+        }
+      },
+      {
+        "scopeName": "linx-liquid.injection.raw-escape",
+        "path": "./syntaxes/raw-escape.injection.json",
+        "injectTo": [
+          "text.html.linx-liquid"
+        ]
+      },
+      {
+        "scopeName": "linx-liquid.injection.liquid",
+        "path": "./syntaxes/liquid.injection.json",
+        "injectTo": [
+          "text.html.linx-liquid"
+        ]
+      }
+    ],
+    "snippets": [
+      {
+        "language": "linx-liquid",
+        "path": "./snippets/linx-liquid.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "linxLiquid.openTemplate",
+        "title": "Abrir template",
+        "category": "Linx"
+      },
+      {
+        "command": "linxLiquid.toggleTemplateScript",
+        "title": "Alternar entre template e script",
+        "category": "Linx"
+      },
+      {
+        "command": "linxLiquid.toggleComment",
+        "title": "Comentar / descomentar bloco",
+        "category": "Linx"
+      },
+      {
+        "command": "linxLiquid.setupWorkspace",
+        "title": "Configurar workspace (formatar ao salvar)",
+        "category": "Linx"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "linxLiquid.openTemplate",
+        "key": "ctrl+alt+t",
+        "mac": "cmd+alt+t"
+      },
+      {
+        "command": "linxLiquid.toggleTemplateScript",
+        "key": "alt+o",
+        "when": "editorTextFocus && (editorLangId == linx-liquid || editorLangId == javascript)"
+      },
+      {
+        "command": "linxLiquid.toggleComment",
+        "key": "ctrl+/",
+        "mac": "cmd+/",
+        "when": "editorTextFocus && !editorReadonly && editorLangId == linx-liquid"
+      }
+    ],
+    "configuration": {
+      "title": "Linx Liquid Template",
+      "properties": {
+        "linxLiquid.themeRoot": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Caminho da raiz do tema (a pasta que contém `Pages/`), usado para resolver `{% include /Pages/... %}`. Relativo à pasta do workspace ou absoluto. Vazio = detectar automaticamente subindo os diretórios até achar uma pasta `Pages/`."
+        },
+        "linxLiquid.sharedThemeRoot": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Caminho da raiz do tema compartilhado, usado pelo filtro `| sharedthemepath`. Vazio = não gerar links para esses caminhos."
+        },
+        "linxLiquid.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Reporta problemas específicos do dialeto: raw/endraw desbalanceado, {% comment %} dentro de raw, Liquid ativo dentro de comentário HTML e include para arquivo inexistente."
+        },
+        "linxLiquid.format.attributeIndent": {
+          "type": "string",
+          "enum": [
+            "oneLevel",
+            "preserve"
+          ],
+          "default": "oneLevel",
+          "markdownDescription": "Como indentar linhas de continuação de atributos (uma tag `<input` cujos atributos seguem nas linhas abaixo). `oneLevel` recua um nível; `preserve` mantém a indentação original dessas linhas."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --experimental-strip-types --disable-warning=MODULE_TYPELESS_PACKAGE_JSON test/*.test.ts",
+    "vscode:prepublish": "node esbuild.mjs --production",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.24.2",
+    "typescript": "^5.7.2",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  }
+}
