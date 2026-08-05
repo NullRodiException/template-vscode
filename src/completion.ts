@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 
 import { findWidgetFor, findThemeRoot } from './core/theme.ts';
+import { themeRootFor, workspaceRootsFor } from './config.ts';
 import { LINX_TAGS, LINX_FILTERS, VUE_FILTERS } from './core/liquidTags.ts';
 import { scan, regionAt } from './core/scanner.ts';
 import { LANGUAGE_ID } from './format/provider.ts';
@@ -34,14 +35,12 @@ async function referencedWidgetProperties(): Promise<Set<string>> {
   return names;
 }
 
-function configFor(document: vscode.TextDocument): string | undefined {
-  const value = vscode.workspace.getConfiguration('linxLiquid', document).get<string>('themeRoot', '');
-  return value.trim() === '' ? undefined : value;
-}
-
 /** Caminhos de `{% include %}`, no formato absoluto e sem extensão que a tag exige. */
 async function includeCompletions(document: vscode.TextDocument): Promise<vscode.CompletionItem[]> {
-  const root = findThemeRoot(document.uri.fsPath, configFor(document));
+  // Fora de um tema Linx a pasta do workspace faz o papel de raiz, igual ao que
+  // `resolveIncludePath` usa para transformar esses caminhos em link.
+  const root =
+    findThemeRoot(document.uri.fsPath, themeRootFor(document)) ?? workspaceRootsFor(document)[0];
   if (!root) {
     return [];
   }
@@ -65,7 +64,7 @@ async function includeCompletions(document: vscode.TextDocument): Promise<vscode
 }
 
 async function widgetCompletions(document: vscode.TextDocument): Promise<vscode.CompletionItem[]> {
-  const widget = findWidgetFor(document.uri.fsPath, configFor(document));
+  const widget = findWidgetFor(document.uri.fsPath, themeRootFor(document));
   const declared = new Map(widget?.properties.map((p) => [p.name, p]) ?? []);
   const referenced = await referencedWidgetProperties();
 

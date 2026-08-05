@@ -164,20 +164,41 @@ function firstExisting(...candidates: string[]): string | undefined {
 /**
  * Resolve `{% include /Pages/OnePageCheckout/components/basket %}`.
  *
- * A extensão `.template` é omitida no include e precisa ser recolocada.
+ * A extensão `.template` é omitida no include e precisa ser recolocada — por isso
+ * cada base é testada com a extensão antes de ser testada crua.
+ *
+ * A raiz do tema tem prioridade, mas não é obrigatória: fora de um tema Linx
+ * (nenhuma pasta `Pages/` acima do arquivo) o include ainda resolve contra as
+ * pastas do workspace passadas em `extraRoots` e contra o diretório do próprio
+ * arquivo. Sem esse fallback, um projeto comum não teria link nenhum.
  */
 export function resolveIncludePath(
   includePath: string,
   fromFile: string,
   override?: string,
+  extraRoots: string[] = [],
 ): string | undefined {
-  const theme = getThemeInfo(fromFile, override);
-  if (!theme) {
-    return undefined;
+  const fromDir = path.dirname(fromFile);
+  const native = includePath.replace(/[/\\]/g, path.sep);
+
+  // `./x` e `../x` são explicitamente relativos: só fazem sentido contra o arquivo.
+  if (/^\.\.?[/\\]/.test(includePath)) {
+    const base = path.resolve(fromDir, native);
+    return firstExisting(`${base}.template`, base);
   }
+
+  // A barra inicial é da raiz do tema, não do sistema de arquivos: `path.resolve`
+  // aqui apontaria para a raiz do drive.
   const relative = includePath.replace(/^[/\\]+/, '').replace(/[/\\]/g, path.sep);
-  const base = path.join(theme.root, relative);
-  return firstExisting(`${base}.template`, base);
+  const theme = getThemeInfo(fromFile, override);
+  const roots = [...(theme ? [theme.root] : []), ...extraRoots, fromDir];
+
+  return firstExisting(
+    ...roots.flatMap((root) => {
+      const base = path.join(root, relative);
+      return [`${base}.template`, base];
+    }),
+  );
 }
 
 /**

@@ -2,12 +2,8 @@ import * as vscode from 'vscode';
 
 import { findPathReferences, type PathReference } from '../core/references.ts';
 import { resolveIncludePath, resolveThemePath, resolveDeployPath } from '../core/theme.ts';
+import { themeRootFor, sharedThemeRootFor, workspaceRootsFor } from '../config.ts';
 import { LANGUAGE_ID } from '../format/provider.ts';
-
-function configFor(document: vscode.TextDocument, key: string): string | undefined {
-  const value = vscode.workspace.getConfiguration('linxLiquid', document).get<string>(key, '');
-  return value.trim() === '' ? undefined : value;
-}
 
 /**
  * Traduz uma referência para um arquivo no disco.
@@ -19,23 +15,24 @@ function configFor(document: vscode.TextDocument, key: string): string | undefin
  */
 function resolve(reference: PathReference, document: vscode.TextDocument): string | undefined {
   const file = document.uri.fsPath;
-  const themeRoot = configFor(document, 'themeRoot');
+  const themeRoot = themeRootFor(document);
+  const roots = workspaceRootsFor(document);
 
   switch (reference.kind) {
     case 'include':
-      return resolveIncludePath(reference.path, file, themeRoot);
+      return resolveIncludePath(reference.path, file, themeRoot, roots);
     case 'theme':
       return resolveThemePath(reference.path, file, themeRoot);
     case 'deploy':
       return (
         resolveDeployPath(reference.path, file, themeRoot) ??
         // `template=` às vezes aparece com caminho de fonte.
-        resolveIncludePath(reference.path, file, themeRoot)
+        resolveIncludePath(reference.path, file, themeRoot, roots)
       );
     case 'shared': {
       // Sem a raiz do tema compartilhado configurada não há como resolver; um
       // link quebrado seria pior do que nenhum link.
-      const sharedRoot = configFor(document, 'sharedThemeRoot');
+      const sharedRoot = sharedThemeRootFor(document);
       return sharedRoot ? resolveThemePath(reference.path, file, sharedRoot) : undefined;
     }
     default:

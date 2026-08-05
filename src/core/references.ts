@@ -29,7 +29,10 @@ export interface PathReference {
 
 const PATTERNS: { kind: ReferenceKind; re: RegExp; group: number }[] = [
   // {% include /Pages/OnePageCheckout/components/basket %}
-  { kind: 'include', re: /\{%-?\s*include\s+([^\s%'"]+)/g, group: 1 },
+  // As aspas são opcionais: o corpus Linx escreve sem, mas `{% include "..." %}`
+  // é sintaxe válida de Liquid. A backreference exige o fechamento da aspa que
+  // abriu — um include com aspa solta não vira referência.
+  { kind: 'include', re: /\{%-?\s*include\s+(["']?)([^\s%"']+)\1/g, group: 2 },
   // template="~/Custom/Content/Widgets/checkout.onepage/helpers/register.template"
   { kind: 'deploy', re: /\btemplate\s*=\s*["']([^"']+)["']/gi, group: 1 },
   // {{ 'Widgets/checkout.onepage/Styles/tailwind.css?v=17' | contentpath }}

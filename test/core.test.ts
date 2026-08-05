@@ -13,7 +13,7 @@ import {
   findThemeRoot,
   getThemeInfo,
 } from '../src/core/theme.ts';
-import { read, corpus, allTemplates, offsetOfLine, CORPUS_ROOT } from './helpers.ts';
+import { read, corpus, allTemplates, offsetOfLine, CORPUS_ROOT, REPO_ROOT } from './helpers.ts';
 
 /** Aplica os edits (que já vêm do fim para o início) sobre o texto. */
 function apply(text: string, edits: TextEditOp[]): string {
@@ -140,6 +140,67 @@ describe('referências a arquivos', () => {
       deploy.some((r) => r.path.endsWith('helpers/register.template')),
       'o template= do profile_register da linha 56',
     );
+  });
+
+  test('o include aceita aspas, e o range cobre só o caminho', () => {
+    const text = '{% include "/ex/index.template" %}';
+    const [reference] = findPathReferences(text);
+
+    assert.equal(reference.kind, 'include');
+    assert.equal(reference.path, '/ex/index.template');
+    assert.equal(
+      text.slice(reference.start, reference.end),
+      '/ex/index.template',
+      'as aspas ficam de fora do link',
+    );
+  });
+
+  test('o include sem aspas continua sendo reconhecido', () => {
+    const [reference] = findPathReferences('{%- include /Pages/OnePageCheckout/components/basket -%}');
+    assert.equal(reference?.path, '/Pages/OnePageCheckout/components/basket');
+  });
+
+  test('aspas simples também valem', () => {
+    const [reference] = findPathReferences("{% include '/ex/index.template' %}");
+    assert.equal(reference?.path, '/ex/index.template');
+  });
+
+  test('include com aspa não fechada não vira referência', () => {
+    assert.deepEqual(findPathReferences('{% include "/ex/index.template %}'), []);
+  });
+});
+
+describe('include fora de um tema Linx', () => {
+  // ex/teste.template inclui "/ex/index.template": caminho a partir da pasta do
+  // workspace, num projeto que não tem Pages/ e portanto não tem raiz de tema.
+  const from = corpus('teste.template');
+
+  test('resolve a partir da pasta do workspace', () => {
+    assert.equal(
+      resolveIncludePath('/ex/index.template', from, undefined, [REPO_ROOT]),
+      corpus('index.template'),
+    );
+  });
+
+  test('a extensão continua opcional nesse fallback', () => {
+    assert.equal(
+      resolveIncludePath('/ex/index', from, undefined, [REPO_ROOT]),
+      corpus('index.template'),
+    );
+  });
+
+  test('./x resolve contra a pasta do próprio arquivo', () => {
+    assert.equal(resolveIncludePath('./index', from), corpus('index.template'));
+    assert.equal(resolveIncludePath('./index.template', from), corpus('index.template'));
+  });
+
+  test('sem raiz de tema nem pasta de workspace, não resolve', () => {
+    assert.equal(resolveIncludePath('/ex/index.template', from), undefined);
+  });
+
+  test('arquivo inexistente continua sem resolver', () => {
+    assert.equal(resolveIncludePath('/ex/nao-existe', from, undefined, [REPO_ROOT]), undefined);
+    assert.equal(resolveIncludePath('./nao-existe', from), undefined);
   });
 });
 
@@ -285,7 +346,8 @@ describe('estrutura do corpus', () => {
     for (const file of allTemplates()) {
       const from = path.join(CORPUS_ROOT, file);
       for (const reference of findPathReferences(read(file))) {
-        if (reference.kind === 'include' && !resolveIncludePath(reference.path, from)) {
+        // `[REPO_ROOT]` reproduz o que a extensão passa como pasta do workspace.
+        if (reference.kind === 'include' && !resolveIncludePath(reference.path, from, undefined, [REPO_ROOT])) {
           broken.push(`${file} → ${reference.path}`);
         }
       }

@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { analyze, type Problem, type Severity } from './core/diagnostics.ts';
 import { findPathReferences } from './core/references.ts';
 import { resolveIncludePath } from './core/theme.ts';
+import { themeRootFor, workspaceRootsFor } from './config.ts';
 import { LANGUAGE_ID } from './format/provider.ts';
 
 const DEBOUNCE_MS = 300;
@@ -26,16 +27,15 @@ function toDiagnostic(document: vscode.TextDocument, problem: Problem): vscode.D
 
 /** `{% include %}` apontando para um arquivo que não existe na árvore. */
 function checkMissingIncludes(document: vscode.TextDocument): vscode.Diagnostic[] {
-  const themeRoot =
-    vscode.workspace.getConfiguration('linxLiquid', document).get<string>('themeRoot', '').trim() ||
-    undefined;
+  const themeRoot = themeRootFor(document);
+  const roots = workspaceRootsFor(document);
 
   const out: vscode.Diagnostic[] = [];
   for (const reference of findPathReferences(document.getText())) {
     if (reference.kind !== 'include') {
       continue;
     }
-    if (resolveIncludePath(reference.path, document.uri.fsPath, themeRoot)) {
+    if (resolveIncludePath(reference.path, document.uri.fsPath, themeRoot, roots)) {
       continue;
     }
     const range = new vscode.Range(
@@ -44,7 +44,7 @@ function checkMissingIncludes(document: vscode.TextDocument): vscode.Diagnostic[
     );
     const diagnostic = new vscode.Diagnostic(
       range,
-      `Não encontrei ${reference.path}.template a partir da raiz do tema. Se a raiz não for detectada corretamente, defina linxLiquid.themeRoot.`,
+      `Não encontrei ${reference.path} a partir da raiz do tema, da pasta do workspace nem da pasta do próprio arquivo (com e sem a extensão .template). Se a raiz do tema não for detectada corretamente, defina linxLiquid.themeRoot.`,
       vscode.DiagnosticSeverity.Warning,
     );
     diagnostic.source = 'linx-liquid';
