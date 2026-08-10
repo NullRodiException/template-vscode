@@ -48,6 +48,14 @@ export async function openTemplateQuickPick(): Promise<void> {
     }
   }
 
+  // As leituras acontecem todas de uma vez: em série, 200 arquivos atrasariam a
+  // abertura do QuickPick em uma ida ao disco cada.
+  const descriptions = new Map(
+    await Promise.all(
+      uris.map(async (uri): Promise<[string, string]> => [uri.toString(), await describe(uri, withLineCount)]),
+    ),
+  );
+
   const items: TemplateItem[] = [];
   for (const folder of [...byFolder.keys()].sort()) {
     items.push({ label: folder === '.' ? 'raiz' : folder, kind: vscode.QuickPickItemKind.Separator });
@@ -55,7 +63,7 @@ export async function openTemplateQuickPick(): Promise<void> {
     for (const uri of entries) {
       items.push({
         label: path.basename(uri.fsPath),
-        description: await describe(uri, withLineCount),
+        description: descriptions.get(uri.toString()) ?? '',
         detail: vscode.workspace.asRelativePath(uri, false).replace(/\\/g, '/'),
         uri,
       });

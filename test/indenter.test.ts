@@ -9,7 +9,14 @@ import {
 } from '../src/format/indenter.ts';
 import { findLiquidTags } from '../src/core/scanner.ts';
 import { NEUTRAL_TAGS, isBlockTag, isEndTag, isMiddleTag } from '../src/core/liquidTags.ts';
-import { read, allTemplates, lineAt } from './helpers.ts';
+import {
+  read,
+  allTemplates,
+  lineAt,
+  corpusTest,
+  corpusDescribe,
+  forEachTemplate,
+} from './helpers.ts';
 
 const TABS: IndentOptions = { insertSpaces: false, tabSize: 4, attributeIndent: 'oneLevel' };
 const SPACES: IndentOptions = { insertSpaces: true, tabSize: 2, attributeIndent: 'oneLevel' };
@@ -20,8 +27,9 @@ function skeleton(text: string): string[] {
 }
 
 describe('formatador — não-corrupção (a garantia principal)', () => {
-  for (const file of allTemplates()) {
-    test(`${file}: só a indentação muda`, () => {
+  forEachTemplate(
+    (file) => `${file}: só a indentação muda`,
+    (file) => {
       const original = read(file);
       for (const options of [TABS, SPACES]) {
         const formatted = formatText(original, options);
@@ -36,13 +44,14 @@ describe('formatador — não-corrupção (a garantia principal)', () => {
           'a quantidade de linhas não pode mudar',
         );
       }
-    });
-  }
+    },
+  );
 });
 
 describe('formatador — idempotência', () => {
-  for (const file of allTemplates()) {
-    test(`${file}: formatar duas vezes é igual a formatar uma`, () => {
+  forEachTemplate(
+    (file) => `${file}: formatar duas vezes é igual a formatar uma`,
+    (file) => {
       const original = read(file);
       for (const options of [TABS, SPACES]) {
         const once = formatText(original, options);
@@ -54,11 +63,11 @@ describe('formatador — idempotência', () => {
           'texto já formatado não deve gerar edit nenhum',
         );
       }
-    });
-  }
+    },
+  );
 });
 
-describe('formatador — regiões preservadas verbatim', () => {
+corpusDescribe('formatador — regiões preservadas verbatim', () => {
   test('o corpo do <script> com Liquid massivo não é tocado', () => {
     const text = read('Pages/OnePageCheckout/includes/PageHeader.template');
     const formatted = formatText(text, TABS);
@@ -115,7 +124,7 @@ describe('formatador — estrutura', () => {
       });
   }
 
-  test('helpers/input.template: {% if %} gerando atributos dentro da tag aberta', () => {
+  corpusTest('helpers/input.template: {% if %} gerando atributos dentro da tag aberta', () => {
     const text = read('Pages/OnePageCheckout/helpers/input.template');
     const lv = levels(text);
 
@@ -132,7 +141,7 @@ describe('formatador — estrutura', () => {
     assert.equal(lv[20], 0, 'linha 21: {% endfor %}');
   });
 
-  test('register.template:74-79: o `>` sozinho volta ao nível do <select', () => {
+  corpusTest('register.template:74-79: o `>` sozinho volta ao nível do <select', () => {
     const text = read('Pages/OnePageCheckout/components/register.template');
     assert.equal(lineAt(text, 79).trim(), '>', 'pré-condição: linha 79 é só o `>`');
 
@@ -155,7 +164,7 @@ describe('formatador — estrutura', () => {
     );
   });
 
-  test('register.template: o <form> atravessa três regiões e continua alinhado', () => {
+  corpusTest('register.template: o <form> atravessa três regiões e continua alinhado', () => {
     const text = read('Pages/OnePageCheckout/components/register.template');
     const lv = levels(text);
 
@@ -166,7 +175,7 @@ describe('formatador — estrutura', () => {
     assert.equal(lv[122], lv[3], '</div> da linha 123 fecha a div da linha 4');
   });
 
-  test('basket.template: o </span> órfão da linha 119 não desalinha o resto', () => {
+  corpusTest('basket.template: o </span> órfão da linha 119 não desalinha o resto', () => {
     const text = read('Pages/OnePageCheckout/components/basket.template');
     assert.match(lineAt(text, 119), /<\/span><\/h4>/, 'pré-condição: </span> sem abertura');
 
@@ -176,7 +185,7 @@ describe('formatador — estrutura', () => {
     assert.equal(lv[150], 0, '</template> volta ao nível 0');
   });
 
-  test('index.template com CRLF preserva os \\r', () => {
+  corpusTest('index.template com CRLF preserva os \\r', () => {
     const text = read('Pages/OnePageCheckout/index.template');
     assert.ok(text.includes('\r\n'), 'pré-condição: index.template usa CRLF');
 
@@ -189,7 +198,7 @@ describe('formatador — estrutura', () => {
     assert.ok(!/\r(?!\n)/.test(formatted), 'nenhum \\r solto');
   });
 
-  test('{% raw %} não adiciona nível: o conteúdo do componente começa no nível 0', () => {
+  corpusTest('{% raw %} não adiciona nível: o conteúdo do componente começa no nível 0', () => {
     const text = read('Pages/OnePageCheckout/components/modal.template');
     const lv = levels(text);
     assert.equal(lv[0], 0, '{% raw %}');
@@ -215,7 +224,7 @@ describe('formatador — estrutura', () => {
     );
   });
 
-  test('preserve deixa toda continuação de atributo idêntica ao original', () => {
+  corpusTest('preserve deixa toda continuação de atributo idêntica ao original', () => {
     for (const file of allTemplates()) {
       const before = read(file).split('\n');
       const preserved = formatText(read(file), { ...TABS, attributeIndent: 'preserve' }).split('\n');
@@ -233,7 +242,7 @@ describe('formatador — estrutura', () => {
 });
 
 describe('formatador — alarme de dialeto', () => {
-  test('toda tag Liquid do corpus é conhecida', () => {
+  corpusTest('toda tag Liquid do corpus é conhecida', () => {
     const unknown = new Map<string, string>();
     for (const file of allTemplates()) {
       for (const tag of findLiquidTags(read(file))) {

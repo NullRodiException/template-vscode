@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 
-import { scan, regionAt } from './core/scanner.ts';
+import { regionAt } from './core/scanner.ts';
 import { LINX_TAGS, LINX_FILTERS, VUE_FILTERS, GLOBAL_OBJECTS } from './core/liquidTags.ts';
+import { regionsOf } from './regionCache.ts';
 import { LANGUAGE_ID } from './format/provider.ts';
 
 interface Entry {
@@ -29,7 +30,7 @@ const hoverProvider: vscode.HoverProvider = {
     const word = document.getText(range);
     const text = document.getText();
     const offset = document.offsetAt(range.start);
-    const kind = regionAt(scan(text), offset)?.kind;
+    const kind = regionAt(regionsOf(document), offset)?.kind;
 
     // O que vem imediatamente antes decide se a palavra é um filtro.
     const before = text.slice(Math.max(0, offset - 40), offset);

@@ -17,7 +17,7 @@
  * Puro e sem `vscode`, para ser testável.
  */
 
-import { scan, regionAt } from './scanner.ts';
+import { scan, regionAt, type Region } from './scanner.ts';
 
 export interface TextEditOp {
   start: number;
@@ -100,8 +100,12 @@ function firstMatchFrom(text: string, re: RegExp, from: number): RegExpExecArray
  * comentário — `components/register.template:42-47` tem um par
  * `{% capture %}/{% endcapture %}` inteiro ali dentro.
  */
-export function toggleBlockComment(text: string, selStart: number, selEnd: number): ToggleResult {
-  const regions = scan(text);
+export function toggleBlockComment(
+  text: string,
+  selStart: number,
+  selEnd: number,
+  regions: Region[] = scan(text),
+): ToggleResult {
   const region = regionAt(regions, selStart);
 
   if (region?.kind === 'liquid-comment') {

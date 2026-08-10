@@ -3,7 +3,8 @@ import * as vscode from 'vscode';
 import { analyze, type Problem, type Severity } from './core/diagnostics.ts';
 import { findPathReferences } from './core/references.ts';
 import { resolveIncludePath } from './core/theme.ts';
-import { themeRootFor, workspaceRootsFor } from './config.ts';
+import { themeRootFor, workspaceRootsFor, isOnDisk } from './config.ts';
+import { regionsOf } from './regionCache.ts';
 import { LANGUAGE_ID } from './format/provider.ts';
 
 const DEBOUNCE_MS = 300;
@@ -27,11 +28,14 @@ function toDiagnostic(document: vscode.TextDocument, problem: Problem): vscode.D
 
 /** `{% include %}` apontando para um arquivo que não existe na árvore. */
 function checkMissingIncludes(document: vscode.TextDocument): vscode.Diagnostic[] {
+  if (!isOnDisk(document)) {
+    return [];
+  }
   const themeRoot = themeRootFor(document);
   const roots = workspaceRootsFor(document);
 
   const out: vscode.Diagnostic[] = [];
-  for (const reference of findPathReferences(document.getText())) {
+  for (const reference of findPathReferences(document.getText(), regionsOf(document))) {
     if (reference.kind !== 'include') {
       continue;
     }
@@ -93,7 +97,12 @@ const quickFixProvider: vscode.CodeActionProvider = {
   },
 };
 
-export function registerDiagnostics(context: vscode.ExtensionContext): void {
+/**
+ * @returns `refreshAll`, para o chamador revalidar tudo quando algo fora dos
+ * documentos abertos muda — um `.template` criado ou apagado altera o resultado
+ * de `missing-include` sem que nenhum texto tenha sido editado.
+ */
+export function registerDiagnostics(context: vscode.ExtensionContext): () => void {
   const collection = vscode.languages.createDiagnosticCollection('linx-liquid');
   context.subscriptions.push(collection);
 
@@ -111,7 +120,9 @@ export function registerDiagnostics(context: vscode.ExtensionContext): void {
       return;
     }
 
-    const problems = analyze(document.getText()).map((p) => toDiagnostic(document, p));
+    const problems = analyze(document.getText(), regionsOf(document)).map((p) =>
+      toDiagnostic(document, p),
+    );
     collection.set(document.uri, [...problems, ...checkMissingIncludes(document)]);
   };
 
@@ -136,10 +147,16 @@ export function registerDiagnostics(context: vscode.ExtensionContext): void {
         vscode.workspace.textDocuments.forEach(refresh);
       }
     }),
+    vscode.workspace.onDidSaveTextDocument(refresh),
     vscode.languages.registerCodeActionsProvider({ language: LANGUAGE_ID }, quickFixProvider, {
       providedCodeActionKinds: [vscode.CodeActionKind.QuickFix],
     }),
   );
 
-  vscode.workspace.textDocuments.forEach(refresh);
+  const refreshAll = (): void => {
+    vscode.workspace.textDocuments.forEach(refresh);
+  };
+
+  refreshAll();
+  return refreshAll;
 }

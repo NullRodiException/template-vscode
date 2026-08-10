@@ -2,9 +2,16 @@
   "name": "linx-liquid-template",
   "displayName": "Linx Liquid Template",
   "description": "Suporte a arquivos .template do Liquid da Linx Commerce: highlight, indentação, comentar bloco, navegação e diagnósticos.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "local",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NullRodiException/template-vscode.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NullRodiException/template-vscode/issues"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -124,7 +131,7 @@
         "linxLiquid.diagnostics.enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Reporta problemas específicos do dialeto: raw/endraw desbalanceado, {% comment %} dentro de raw, Liquid ativo dentro de comentário HTML e include para arquivo inexistente."
+          "description": "Reporta problemas específicos do dialeto: raw/endraw desbalanceado, bloco Liquid sem fechamento, {% comment %} dentro de raw, Liquid ativo dentro de comentário HTML, filtro usado do lado errado do {% raw %} e include para arquivo inexistente."
         },
         "linxLiquid.format.attributeIndent": {
           "type": "string",
@@ -148,6 +155,7 @@
   },
   "devDependencies": {
     "@types/node": "^22.10.2",
+    "@vscode/vsce": "^3.2.1",
     "@types/vscode": "^1.85.0",
     "esbuild": "^0.24.2",
     "typescript": "^5.7.2",

@@ -7,7 +7,7 @@
  * É o único jeito de provar o highlight sem abrir o editor e olhar.
  */
 
-import { test, describe, before } from 'node:test';
+import { test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -15,7 +15,7 @@ import { createRequire } from 'node:module';
 
 import type { IGrammar } from 'vscode-textmate';
 
-import { REPO_ROOT, read, lineAt } from './helpers.ts';
+import { REPO_ROOT, read, lineAt, corpusDescribe } from './helpers.ts';
 import { builtinGrammars } from './builtinGrammars.ts';
 
 // Os dois pacotes são CommonJS; o namespace ESM não expõe as funções direto.
@@ -133,7 +133,7 @@ function inspect(file: string) {
   };
 }
 
-describe('gramática — alternância raw ↔ Liquid', () => {
+corpusDescribe('gramática — alternância raw ↔ Liquid', () => {
   test('dentro de {% raw %} os {{ }} são mustaches do Vue', () => {
     const basket = inspect('Pages/OnePageCheckout/components/basket.template');
 
@@ -225,7 +225,7 @@ describe('gramática — alternância raw ↔ Liquid', () => {
   });
 });
 
-describe('gramática — tags e filtros do dialeto', () => {
+corpusDescribe('gramática — tags e filtros do dialeto', () => {
   test('as 12 tags proprietárias têm escopo próprio', () => {
     const cases: [string, number, string][] = [
       ['Pages/OnePageCheckout/components/register.template', 56, 'profile_register'],
@@ -343,7 +343,7 @@ describe('gramática — tags e filtros do dialeto', () => {
   });
 });
 
-describe('gramática — invariantes sobre o corpus', () => {
+corpusDescribe('gramática — invariantes sobre o corpus', () => {
   test('nenhum arquivo termina com região raw pendente', () => {
     const pending: string[] = [];
     for (const file of [

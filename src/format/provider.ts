@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 
 import { computeIndentation, type IndentOptions, type IndentEdit } from './indenter.ts';
+import { regionsOf } from '../regionCache.ts';
 
 export const LANGUAGE_ID = 'linx-liquid';
 
@@ -31,7 +32,11 @@ function toTextEdits(edits: IndentEdit[]): vscode.TextEdit[] {
 
 const documentFormatter: vscode.DocumentFormattingEditProvider = {
   provideDocumentFormattingEdits(document, options) {
-    const edits = computeIndentation(document.getText(), readOptions(document, options));
+    const edits = computeIndentation(
+      document.getText(),
+      readOptions(document, options),
+      regionsOf(document),
+    );
     return toTextEdits(edits);
   },
 };
@@ -40,7 +45,11 @@ const rangeFormatter: vscode.DocumentRangeFormattingEditProvider = {
   provideDocumentRangeFormattingEdits(document, range, options) {
     // A indentação de uma linha depende de tudo que veio antes dela, então o
     // cálculo roda sobre o documento inteiro e só o resultado é recortado.
-    const all = computeIndentation(document.getText(), readOptions(document, options));
+    const all = computeIndentation(
+      document.getText(),
+      readOptions(document, options),
+      regionsOf(document),
+    );
     const inRange = all.filter((e) => e.line >= range.start.line && e.line <= range.end.line);
     return toTextEdits(inRange);
   },

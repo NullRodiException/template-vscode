@@ -1,0 +1,4 @@
+{% assign nome = "Rodrigo" %}
+{% assign idade = 30 %}
+
+{% include /test/fixtures/plain-project/index %}

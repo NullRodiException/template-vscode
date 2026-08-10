@@ -32,7 +32,11 @@ A restrição não é excesso de zelo: a árvore HTML destes arquivos não é ba
 
 Ficam intocados: o corpo de `<script>` e `<style>`, mustaches do Vue quebrados em várias linhas, e o interior de comentários.
 
-Além do formatador, `indentationRules` e `onEnterRules` dão indentação automática enquanto você digita, e os blocos Liquid e `{% raw %}` podem ser dobrados.
+Além do formatador, `indentationRules` e `onEnterRules` dão indentação automática enquanto você digita.
+
+### Dobra
+
+As faixas dobráveis saem da estrutura real, não da indentação — que nestes arquivos não é confiável. Dobram `{% if %}`, `{% for %}`, `{% capture %}` e os demais blocos, mais `{% raw %}`, `{% comment %}`, `<script>`, `<style>` e comentários HTML. Um bloco sem fechamento não dobra: sem o `end*` não há como saber onde a faixa terminaria, e é o diagnóstico que reporta o problema.
 
 ### Comentar bloco — `Ctrl+/`
 
@@ -47,23 +51,34 @@ Pressionar de novo com o cursor dentro do bloco descomenta.
 | Atalho | O que faz |
 |---|---|
 | `Ctrl+Alt+T` | Lista todos os `.template` do workspace, agrupados por pasta |
-| `Ctrl+Click` | Abre o arquivo de um `{% include %}`, de um `template="…"` ou de um `\| themepath` |
+| `Ctrl+Click` ou `F12` | Abre o arquivo de um `{% include %}`, de um `template="…"` ou de um `\| themepath` |
 | `Alt+O` | Alterna entre `components/X.template` e `Scripts/components/X.js` |
 
-O Ctrl+Click resolve os dois esquemas de caminho que convivem no projeto: o de **fonte** (`/Pages/OnePageCheckout/…`, igual à árvore local) e o de **deploy** (`~/Custom/Content/Widgets/<folder>/…`), traduzido pelo atributo `folder` do `manifest.xml`.
+A resolução cobre os dois esquemas de caminho que convivem no projeto: o de **fonte** (`/Pages/OnePageCheckout/…`, igual à árvore local) e o de **deploy** (`~/Custom/Content/Widgets/<folder>/…`), traduzido pelo atributo `folder` do `manifest.xml`. `F12` e `Alt+F12` (Peek) usam o mesmo resolvedor do Ctrl+Click.
+
+O Outline e os breadcrumbs listam os `<template id="tpl-…">`, os `<script>`/`<style>` e os `{% capture %}`/`{% assign %}` — o que se procura num arquivo de 240 linhas.
 
 ### Diagnósticos
 
 | Regra | Severidade |
 |---|---|
 | `{% raw %}` ou `{% comment %}` sem fechamento | Erro — o resto do arquivo vai renderizado como texto cru |
+| Bloco Liquid sem fechamento (`{% if %}` sem `{% endif %}`) ou `end*` órfão | Erro |
 | `{% comment %}` dentro de `{% raw %}` | Aviso, com Quick Fix para `<!-- -->` |
+| Filtro do lado errado do `{% raw %}` (`\| currency` fora, `\| json` dentro) | Aviso |
 | Tag Liquid ativa dentro de comentário HTML | Informação — o comentário não impede a execução |
 | `{% include %}` para arquivo inexistente | Aviso |
 
+Um `{% raw %}` desbalanceado suprime a checagem de blocos: sem o `{% endraw %}` metade do arquivo troca de linguagem, e reportar blocos em cima disso esconderia a causa única.
+
 ### Hover, autocomplete e snippets
 
-Passar o mouse sobre as tags e filtros da Linx mostra assinatura, descrição e um exemplo real. O autocomplete oferece os caminhos de `{% include %}` e as propriedades de `{{ Widget. }}` — unindo as declaradas no `manifest.xml` com as efetivamente usadas nos templates, porque as duas listas costumam divergir.
+Passar o mouse sobre as tags e filtros da Linx mostra assinatura, descrição e um exemplo real. O autocomplete oferece:
+
+- os caminhos de `{% include %}`;
+- as propriedades de `{{ Widget. }}` — unindo as declaradas no `manifest.xml` com as efetivamente usadas nos templates, porque as duas listas costumam divergir;
+- o `{% end… %}` do bloco aberto mais interno, com a linha em que ele abriu;
+- as tags do dialeto e os objetos globais do servidor (`Config`, `Basket`, `Checkout`, `forloop`…), sempre respeitando a fronteira do `{% raw %}` — dentro dele nada disso existe.
 
 Snippets: `lxcomponent` (esqueleto de componente novo), `forjson` (laço gerando array JSON dentro de `<script>`), e um para cada tag proprietária.
 
@@ -84,17 +99,22 @@ Tab ou espaço vem do próprio editor (`editor.detectIndentation`), então cada 
 
 ```bash
 npm install
-npm run build      # bundle em dist/extension.cjs
+npm run build      # bundle em dist/extension.cjs (rode antes de npm test)
 npm run watch      # rebuild contínuo
-npm test           # 146 testes
+npm test
 npm run typecheck
+npm run package    # gera o .vsix
 ```
 
 `F5` abre o Extension Development Host já com a pasta `ex/` carregada.
 
 ### Sobre os testes
 
-Rodam sobre os 27 arquivos `.template` reais em `ex/`, não sobre fixtures inventadas. As garantias mais importantes:
+Os testes de comportamento rodam sobre os 27 arquivos `.template` reais em `ex/`, não sobre fixtures inventadas.
+
+**`ex/` não vai para o repositório** — é código de cliente, e está no `.gitignore`. Num clone sem essa pasta, os testes que dependem dela se declaram *skipped* em vez de derrubar o suite; os que usam strings inline continuam rodando, e é essa parte que a CI verifica. Os poucos casos que precisavam de um projeto comum (sem `Pages/`, e portanto sem raiz de tema) usam fixtures versionadas em `test/fixtures/`.
+
+As garantias mais importantes:
 
 - **Não-corrupção** — para cada arquivo, o texto formatado com cada linha passada por `trim()` tem que ser idêntico ao original com o mesmo tratamento. Prova que nada além da indentação mudou.
 - **Idempotência** — formatar duas vezes é igual a formatar uma vez.
@@ -104,14 +124,19 @@ Rodam sobre os 27 arquivos `.template` reais em `ex/`, não sobre fixtures inven
 ### Organização
 
 ```
-src/core/       scanner de regiões, tabela do dialeto, resolução de caminhos,
-                comentário e diagnósticos — tudo puro, sem importar 'vscode'
-src/format/     indentador (puro) + providers
-src/navigation/ quick pick, document links, toggle template↔js
+src/core/       scanner de regiões, emparelhamento de blocos, tabela do dialeto,
+                resolução de caminhos, símbolos, dobra, comentário e diagnósticos
+                — tudo puro, sem importar 'vscode'
+src/format/     indentador (puro) + providers de formatação e dobra
+src/navigation/ quick pick, links, definição, símbolos, toggle template↔js
 syntaxes/       gramática principal + duas injeções
 ```
 
-O scanner de `src/core/scanner.ts` é a peça central: particiona o arquivo em regiões (`liquid`, `raw`, `liquid-comment`, `script`, `style`, `html-comment`) reproduzindo a ordem real de execução do servidor. Comentar, formatar, linkar e diagnosticar derivam dele.
+O scanner de `src/core/scanner.ts` é a peça central: particiona o arquivo em regiões (`liquid`, `raw`, `liquid-comment`, `script`, `style`, `html-comment`) reproduzindo a ordem real de execução do servidor. Comentar, formatar, dobrar, linkar e diagnosticar derivam dele.
+
+Em cima dele, `src/core/blocks.ts` emparelha os blocos Liquid uma vez só, e os três consumidores que precisam dessa pilha — diagnóstico de desbalanceamento, dobra e autocomplete de `{% end… %}` — compartilham o resultado. Se cada um mantivesse a sua, o mesmo `{% endif %}` poderia ser erro para um e fechamento válido para outro.
+
+`src/regionCache.ts` guarda as regiões por versão do documento: uma edição, um `scan()`, para todos os providers.
 
 ## Nota sobre a extensão `.template`
 

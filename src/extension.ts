@@ -1,7 +1,9 @@
 import * as vscode from 'vscode';
 
 import { registerFormatting, LANGUAGE_ID } from './format/provider.ts';
+import { registerFolding } from './format/folding.ts';
 import { registerLinks } from './navigation/links.ts';
+import { registerSymbols } from './navigation/symbols.ts';
 import { registerDiagnostics } from './diagnostics.ts';
 import { registerHover } from './hover.ts';
 import { registerCompletion } from './completion.ts';
@@ -9,6 +11,8 @@ import { openTemplateQuickPick } from './navigation/quickOpen.ts';
 import { toggleTemplateScript } from './navigation/toggle.ts';
 import { toggleBlockComment } from './core/comment.ts';
 import { clearThemeCache } from './core/theme.ts';
+import { regionsOf, clearRegionCache } from './regionCache.ts';
+import { clearWidgetIndex } from './widgetIndex.ts';
 
 /**
  * Comenta ou descomenta o bloco selecionado com `{% comment %}`.
@@ -30,6 +34,7 @@ async function toggleComment(): Promise<void> {
     text,
     document.offsetAt(selection.start),
     document.offsetAt(selection.end),
+    regionsOf(document),
   );
 
   const applied = await editor.edit((builder) => {
@@ -58,7 +63,7 @@ async function toggleComment(): Promise<void> {
  * configurações globais do usuário, então só um `.vscode/settings.json` do
  * workspace garante o comportamento.
  */
-async function setupWorkspace(): Promise<void> {
+async function setupWorkspace(extensionId: string): Promise<void> {
   const folder = vscode.workspace.workspaceFolders?.[0];
   if (!folder) {
     void vscode.window.showWarningMessage('Abra uma pasta para configurar o workspace.');
@@ -68,7 +73,10 @@ async function setupWorkspace(): Promise<void> {
   const config = vscode.workspace.getConfiguration('', folder.uri);
   await config.update(
     `[${LANGUAGE_ID}]`,
-    { 'editor.formatOnSave': true, 'editor.defaultFormatter': 'local.linx-liquid-template' },
+    // O id vem do próprio manifesto: escrever `local.linx-liquid-template` aqui
+    // faria a configuração apontar para um formatador inexistente no dia em que
+    // o `publisher` mudasse.
+    { 'editor.formatOnSave': true, 'editor.defaultFormatter': extensionId },
     vscode.ConfigurationTarget.Workspace,
   );
   void vscode.window.showInformationMessage(
@@ -78,8 +86,10 @@ async function setupWorkspace(): Promise<void> {
 
 export function activate(context: vscode.ExtensionContext): void {
   registerFormatting(context);
+  registerFolding(context);
   registerLinks(context);
-  registerDiagnostics(context);
+  registerSymbols(context);
+  const refreshDiagnostics = registerDiagnostics(context);
   registerHover(context);
   registerCompletion(context);
 
@@ -87,18 +97,35 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('linxLiquid.openTemplate', openTemplateQuickPick),
     vscode.commands.registerCommand('linxLiquid.toggleTemplateScript', toggleTemplateScript),
     vscode.commands.registerCommand('linxLiquid.toggleComment', toggleComment),
-    vscode.commands.registerCommand('linxLiquid.setupWorkspace', setupWorkspace),
+    vscode.commands.registerCommand('linxLiquid.setupWorkspace', () =>
+      setupWorkspace(context.extension.id),
+    ),
   );
 
   // A raiz do tema e os widgets são cacheados; um manifest novo ou alterado
   // muda a tradução de caminho de deploy para caminho local.
-  const watcher = vscode.workspace.createFileSystemWatcher('**/manifest.xml');
-  watcher.onDidCreate(clearThemeCache);
-  watcher.onDidChange(clearThemeCache);
-  watcher.onDidDelete(clearThemeCache);
-  context.subscriptions.push(watcher);
+  const manifestWatcher = vscode.workspace.createFileSystemWatcher('**/manifest.xml');
+  manifestWatcher.onDidCreate(clearThemeCache);
+  manifestWatcher.onDidChange(clearThemeCache);
+  manifestWatcher.onDidDelete(clearThemeCache);
+
+  // Criar ou apagar um `.template` muda o resultado do diagnóstico de include
+  // inexistente e a lista do autocomplete, sem que nenhum texto tenha sido
+  // editado — sem isto o aviso fica pendurado até alguém digitar algo.
+  const templateWatcher = vscode.workspace.createFileSystemWatcher('**/*.template');
+  const onTemplateTreeChanged = (): void => {
+    clearWidgetIndex();
+    refreshDiagnostics();
+  };
+  templateWatcher.onDidCreate(onTemplateTreeChanged);
+  templateWatcher.onDidDelete(onTemplateTreeChanged);
+  templateWatcher.onDidChange(clearWidgetIndex);
+
+  context.subscriptions.push(manifestWatcher, templateWatcher);
 }
 
 export function deactivate(): void {
   clearThemeCache();
+  clearRegionCache();
+  clearWidgetIndex();
 }

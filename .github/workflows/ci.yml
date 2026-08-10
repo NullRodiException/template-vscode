@@ -1,0 +1,29 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # `npm test` usa --experimental-strip-types, que exige Node 22.6+.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      # Antes dos testes: bundle.test.ts carrega dist/extension.cjs.
+      - run: npm run build
+
+      # O corpus de ex/ não vai para o repositório; os testes que dependem dele
+      # se declaram pulados, e os de gramática também, por falta de VS Code.
+      - run: npm test

@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import { toggleBlockComment, type TextEditOp } from '../src/core/comment.ts';
 import { findPathReferences } from '../src/core/references.ts';
 import { analyze } from '../src/core/diagnostics.ts';
+import { BLOCK_TAGS } from '../src/core/liquidTags.ts';
 import {
   resolveIncludePath,
   resolveDeployPath,
@@ -13,7 +14,17 @@ import {
   findThemeRoot,
   getThemeInfo,
 } from '../src/core/theme.ts';
-import { read, corpus, allTemplates, offsetOfLine, CORPUS_ROOT, REPO_ROOT } from './helpers.ts';
+import {
+  read,
+  corpus,
+  fixture,
+  allTemplates,
+  offsetOfLine,
+  CORPUS_ROOT,
+  REPO_ROOT,
+  corpusTest,
+  corpusDescribe,
+} from './helpers.ts';
 
 /** Aplica os edits (que já vêm do fim para o início) sobre o texto. */
 function apply(text: string, edits: TextEditOp[]): string {
@@ -58,7 +69,7 @@ describe('comentar bloco', () => {
     assert.equal(apply(commented, back.edits), text);
   });
 
-  test('descomenta o bloco real do register.template sem tocar o capture aninhado', () => {
+  corpusTest('descomenta o bloco real do register.template sem tocar o capture aninhado', () => {
     const text = read('Pages/OnePageCheckout/components/register.template');
     // O bloco das linhas 42-47 contém um par {% capture %}/{% endcapture %} inteiro.
     const cursor = offsetOfLine(text, 44, 5);
@@ -75,7 +86,7 @@ describe('comentar bloco', () => {
     );
   });
 
-  test('sinaliza quando o comentário cai dentro de {% raw %}', () => {
+  corpusTest('sinaliza quando o comentário cai dentro de {% raw %}', () => {
     const text = read('Pages/OnePageCheckout/components/basket.template');
     const inRaw = offsetOfLine(text, 27);
     assert.equal(toggleBlockComment(text, inRaw, inRaw).insideRaw, true, 'linha 27 está em raw');
@@ -87,7 +98,7 @@ describe('comentar bloco', () => {
 });
 
 describe('referências a arquivos', () => {
-  test('encontra os 20 includes de wd.checkout.onepage.template', () => {
+  corpusTest('encontra os 20 includes de wd.checkout.onepage.template', () => {
     const text = read('Pages/OnePageCheckout/wd.checkout.onepage.template');
     const includes = findPathReferences(text).filter((r) => r.kind === 'include');
 
@@ -102,7 +113,7 @@ describe('referências a arquivos', () => {
     );
   });
 
-  test('classifica deploy, theme e shared corretamente', () => {
+  corpusTest('classifica deploy, theme e shared corretamente', () => {
     const header = findPathReferences(read('Pages/OnePageCheckout/includes/PageHeader.template'));
     assert.ok(
       header.some((r) => r.kind === 'deploy' && r.path.includes('Widgets/checkout.onepage/Styles')),
@@ -124,7 +135,7 @@ describe('referências a arquivos', () => {
     );
   });
 
-  test('ignora o que está dentro de {% raw %}', () => {
+  corpusTest('ignora o que está dentro de {% raw %}', () => {
     const text = read('Pages/OnePageCheckout/components/basket.template');
     assert.deepEqual(
       findPathReferences(text),
@@ -133,7 +144,7 @@ describe('referências a arquivos', () => {
     );
   });
 
-  test('acha o template= das tags da Linx', () => {
+  corpusTest('acha o template= das tags da Linx', () => {
     const text = read('Pages/OnePageCheckout/components/register.template');
     const deploy = findPathReferences(text).filter((r) => r.kind === 'deploy');
     assert.ok(
@@ -171,40 +182,37 @@ describe('referências a arquivos', () => {
 });
 
 describe('include fora de um tema Linx', () => {
-  // ex/teste.template inclui "/ex/index.template": caminho a partir da pasta do
-  // workspace, num projeto que não tem Pages/ e portanto não tem raiz de tema.
-  const from = corpus('teste.template');
+  // test/fixtures/plain-project/ é um projeto comum: sem Pages/, e portanto sem
+  // raiz de tema. Fica versionado junto com o código, ao contrário de ex/, para
+  // que este caso continue coberto num clone sem o corpus.
+  const BASE = '/test/fixtures/plain-project';
+  const from = fixture('plain-project/teste.template');
+  const target = fixture('plain-project/index.template');
 
   test('resolve a partir da pasta do workspace', () => {
-    assert.equal(
-      resolveIncludePath('/ex/index.template', from, undefined, [REPO_ROOT]),
-      corpus('index.template'),
-    );
+    assert.equal(resolveIncludePath(`${BASE}/index.template`, from, undefined, [REPO_ROOT]), target);
   });
 
   test('a extensão continua opcional nesse fallback', () => {
-    assert.equal(
-      resolveIncludePath('/ex/index', from, undefined, [REPO_ROOT]),
-      corpus('index.template'),
-    );
+    assert.equal(resolveIncludePath(`${BASE}/index`, from, undefined, [REPO_ROOT]), target);
   });
 
   test('./x resolve contra a pasta do próprio arquivo', () => {
-    assert.equal(resolveIncludePath('./index', from), corpus('index.template'));
-    assert.equal(resolveIncludePath('./index.template', from), corpus('index.template'));
+    assert.equal(resolveIncludePath('./index', from), target);
+    assert.equal(resolveIncludePath('./index.template', from), target);
   });
 
   test('sem raiz de tema nem pasta de workspace, não resolve', () => {
-    assert.equal(resolveIncludePath('/ex/index.template', from), undefined);
+    assert.equal(resolveIncludePath(`${BASE}/index.template`, from), undefined);
   });
 
   test('arquivo inexistente continua sem resolver', () => {
-    assert.equal(resolveIncludePath('/ex/nao-existe', from, undefined, [REPO_ROOT]), undefined);
+    assert.equal(resolveIncludePath(`${BASE}/nao-existe`, from, undefined, [REPO_ROOT]), undefined);
     assert.equal(resolveIncludePath('./nao-existe', from), undefined);
   });
 });
 
-describe('resolução de caminhos do tema', () => {
+corpusDescribe('resolução de caminhos do tema', () => {
   const anyFile = corpus('Pages/OnePageCheckout/wd.checkout.onepage.template');
 
   test('a raiz do tema é a pasta que contém Pages/', () => {
@@ -288,7 +296,7 @@ describe('resolução de caminhos do tema', () => {
 });
 
 describe('diagnósticos', () => {
-  test('os 27 arquivos do corpus não têm erro de balanceamento', () => {
+  corpusTest('os 27 arquivos do corpus não têm erro de balanceamento', () => {
     const errors: string[] = [];
     for (const file of allTemplates()) {
       for (const problem of analyze(read(file))) {
@@ -321,7 +329,7 @@ describe('diagnósticos', () => {
     assert.match(warning.message, /<!-- -->/);
   });
 
-  test('Liquid ativo dentro de comentário HTML é sinalizado', () => {
+  corpusTest('Liquid ativo dentro de comentário HTML é sinalizado', () => {
     const text = read('Pages/OnePageCheckout/components/delivery-addresses.template');
     const problem = analyze(text).find((p) => p.code === 'liquid-in-html-comment');
 
@@ -340,7 +348,147 @@ describe('diagnósticos', () => {
   });
 });
 
-describe('estrutura do corpus', () => {
+describe('diagnósticos — blocos desbalanceados', () => {
+  /** Só os problemas de bloco, na ordem em que aparecem no texto. */
+  function blocks(text: string) {
+    return analyze(text).filter((p) => p.code === 'unbalanced-block');
+  }
+
+  test('{% if %} sem {% endif %} é erro apontado na abertura', () => {
+    const text = '{% if x %}\n<p>oi</p>\n';
+    const [problem] = blocks(text);
+
+    assert.ok(problem, 'a abertura órfã deve ser reportada');
+    assert.equal(problem.severity, 'error');
+    assert.equal(text.slice(problem.start, problem.end), '{% if x %}', 'o range cobre a tag inteira');
+    assert.match(problem.message, /\{% endif %\}/, 'a mensagem diz qual tag está faltando');
+  });
+
+  test('{% endfor %} sem abertura é erro', () => {
+    const [problem] = blocks('<p>oi</p>\n{% endfor %}');
+    assert.equal(problem?.severity, 'error');
+    assert.match(problem.message, /sem o \{% for %\} correspondente/);
+  });
+
+  test('blocos aninhados corretos não geram nada', () => {
+    assert.deepEqual(
+      blocks('{% for i in x %}{% if i %}{% case i %}{% when 1 %}a{% endcase %}{% endif %}{% endfor %}'),
+      [],
+      '{% when %} é tag do meio: não abre bloco',
+    );
+  });
+
+  test('todos os pares de BLOCK_TAGS/END_TAGS se reconhecem', () => {
+    for (const tag of BLOCK_TAGS) {
+      assert.deepEqual(blocks(`{% ${tag} x %}conteúdo{% end${tag} %}`), [], `${tag} deve balancear`);
+      assert.equal(blocks(`{% ${tag} x %}conteúdo`).length, 1, `${tag} sozinho deve ser reportado`);
+    }
+  });
+
+  test('fechar o bloco de fora denuncia o de dentro', () => {
+    // {% if %} abre, {% for %} abre, e só o endif aparece.
+    const problems = blocks('{% if a %}\n{% for i in b %}\n<p>x</p>\n{% endif %}');
+
+    assert.equal(problems.length, 1, 'só o for ficou aberto — o if fechou');
+    assert.match(problems[0].message, /\{% for %\} nunca é fechado/);
+    assert.match(problems[0].message, /\{% endif %\}/, 'a mensagem explica quem fechou por fora');
+  });
+
+  test('o que está dentro de {% raw %} e de {% comment %} não conta', () => {
+    assert.deepEqual(
+      blocks('{% raw %}{% if x %}{% endraw %}'),
+      [],
+      'dentro de raw, {% if %} é texto literal',
+    );
+    assert.deepEqual(
+      blocks('{% comment %}{% if x %}{% endcomment %}'),
+      [],
+      'dentro de comment nada é processado',
+    );
+  });
+
+  test('o que está dentro de comentário HTML conta', () => {
+    // O comentário HTML não protege nada: o Liquid roda antes do HTML.
+    assert.equal(
+      blocks('<!-- {% if x %} -->\n<p>oi</p>').length,
+      1,
+      'o {% if %} comentado executa no servidor e continua aberto',
+    );
+  });
+
+  test('{% raw %} desbalanceado suprime a checagem de blocos', () => {
+    // Sem o {% endraw %}, o resto do arquivo muda de região; reportar blocos aí
+    // seria uma cascata de erros derivados escondendo a causa única.
+    const problems = analyze('{% raw %}\n{% if x %}\n<p>oi</p>\n');
+
+    assert.equal(problems.length, 1);
+    assert.equal(problems[0].code, 'unbalanced-raw');
+  });
+
+  test('include não abre bloco', () => {
+    assert.deepEqual(
+      blocks('{% include /Pages/OnePageCheckout/components/basket %}'),
+      [],
+      'as tags neutras e as 12 da Linx nunca desbalanceiam',
+    );
+  });
+});
+
+describe('diagnósticos — filtro na região errada', () => {
+  function filters(text: string) {
+    return analyze(text).filter((p) => p.code === 'filter-wrong-region');
+  }
+
+  test('filtro do Vue fora de raw é avisado', () => {
+    const text = '<p>{{ item.RetailPrice | currency }}</p>';
+    const [problem] = filters(text);
+
+    assert.ok(problem, '| currency é do Vue e não existe no servidor');
+    assert.equal(problem.severity, 'warning');
+    assert.equal(text.slice(problem.start, problem.end), 'currency', 'o range cobre só o nome');
+  });
+
+  test('filtro do Liquid dentro de raw é avisado', () => {
+    const [problem] = filters('{% raw %}{{ Config | json }}{% endraw %}');
+    assert.ok(problem, '| json não roda dentro de raw');
+    assert.match(problem.message, /não roda/);
+  });
+
+  test('cada filtro no seu lugar não gera nada', () => {
+    assert.deepEqual(filters('{{ Config | json }}'), []);
+    assert.deepEqual(filters('{% raw %}{{ item.Price | currency }}{% endraw %}'), []);
+  });
+
+  test('o || do JavaScript não é lido como filtro', () => {
+    assert.deepEqual(
+      filters('{% raw %}{{ a || currency }}{% endraw %}'),
+      [],
+      'o `||` já foi confundido com filtro antes; a gramática e o diagnóstico têm que concordar',
+    );
+  });
+
+  test('o | fora de uma interpolação é ignorado', () => {
+    assert.deepEqual(
+      filters('<script>const mask = a | currency;</script>'),
+      [],
+      'bitwise-or de JavaScript não é pipe de filtro',
+    );
+  });
+
+  test('filtro desconhecido das duas tabelas não vira ruído', () => {
+    assert.deepEqual(
+      filters('{{ x | filtroCustomizadoDoProjeto }}'),
+      [],
+      'só o que é exclusivo de uma das tabelas é reportado',
+    );
+  });
+
+  test('dentro de {% comment %} nada é reportado', () => {
+    assert.deepEqual(filters('{% comment %}{{ x | currency }}{% endcomment %}'), []);
+  });
+});
+
+corpusDescribe('estrutura do corpus', () => {
   test('todo include do corpus aponta para um arquivo existente', () => {
     const broken: string[] = [];
     for (const file of allTemplates()) {

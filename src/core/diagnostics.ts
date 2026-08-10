@@ -9,11 +9,15 @@
  */
 
 import { scan, regionAt, type Region } from './scanner.ts';
+import { analyzeBlocks } from './blocks.ts';
+import { LINX_FILTERS, VUE_FILTERS } from './liquidTags.ts';
 
 export type ProblemCode =
   | 'unbalanced-raw'
+  | 'unbalanced-block'
   | 'comment-in-raw'
-  | 'liquid-in-html-comment';
+  | 'liquid-in-html-comment'
+  | 'filter-wrong-region';
 
 export type Severity = 'error' | 'warning' | 'info';
 
@@ -96,6 +100,43 @@ function checkUnbalancedRaw(text: string): Problem[] {
 }
 
 /**
+ * Bloco Liquid aberto e nunca fechado — `{% if %}` sem `{% endif %}`, `{% for %}`
+ * sem `{% endfor %}` — e o inverso.
+ *
+ * É o erro mais comum do Liquid, e o único que nem o formatador nem a gramática
+ * denunciam: o indentador é deliberadamente tolerante a desbalanceamento
+ * (`popTolerant` em `format/indenter.ts`) para não desalinhar o arquivo inteiro
+ * por causa de um `</span>` órfão, então uma tag faltando passa despercebida até
+ * a página quebrar no servidor.
+ */
+function checkUnbalancedBlocks(text: string, regions: Region[]): Problem[] {
+  const { unclosed, orphanEnds } = analyzeBlocks(text, regions);
+
+  return [
+    ...orphanEnds.map(
+      (end): Problem => ({
+        code: 'unbalanced-block',
+        severity: 'error',
+        message: `{% end${end.tag} %} sem o {% ${end.tag} %} correspondente.`,
+        start: end.start,
+        end: end.end,
+      }),
+    ),
+    ...unclosed.map(
+      (open): Problem => ({
+        code: 'unbalanced-block',
+        severity: 'error',
+        message: open.closedByOuter
+          ? `{% ${open.tag} %} nunca é fechado — o {% ${open.closedByOuter} %} seguinte fecha o bloco de fora.`
+          : `{% ${open.tag} %} nunca é fechado. Falta o {% end${open.tag} %}.`,
+        start: open.start,
+        end: open.end,
+      }),
+    ),
+  ];
+}
+
+/**
  * `{% comment %}` dentro de `{% raw %}`, onde ele não é processado e o conteúdo
  * continua aparecendo na página.
  */
@@ -164,10 +205,84 @@ function checkLiquidInHtmlComment(text: string, regions: Region[]): Problem[] {
   return problems;
 }
 
+/** Um `{{ … }}` ou `{% … %}` inteiro, para não confundir o `|` do JS com filtro. */
+const INTERPOLATION_RE = /\{\{[\s\S]*?\}\}|\{%[\s\S]*?%\}/g;
+/** `| nome`, sem casar com o `||` do JavaScript. */
+const FILTER_RE = /(?<!\|)\|\s*([a-zA-Z_]\w*)/g;
+
+/**
+ * Filtro usado do lado errado da fronteira `{% raw %}`.
+ *
+ * Os dois conjuntos não se misturam e a confusão é silenciosa: um `| currency`
+ * fora de raw é filtro do Vue chamado onde só existe o servidor — o Liquid não o
+ * conhece e o valor sai cru. Um `| json` dentro de raw é o inverso: o navegador
+ * recebe o texto literal `| json` e o Vue não faz nada com ele.
+ *
+ * Só reporta o nome que existe **exclusivamente** na tabela do outro lado; nomes
+ * presentes nas duas (ou em nenhuma) ficam de fora, para não transformar cada
+ * filtro customizado do projeto em aviso.
+ */
+function checkFilterRegion(text: string, regions: Region[]): Problem[] {
+  const problems: Problem[] = [];
+
+  INTERPOLATION_RE.lastIndex = 0;
+  let interpolation: RegExpExecArray | null;
+  while ((interpolation = INTERPOLATION_RE.exec(text)) !== null) {
+    const kind = regionAt(regions, interpolation.index)?.kind;
+    if (kind === 'liquid-comment') {
+      continue;
+    }
+    const inRaw = kind === 'raw';
+
+    FILTER_RE.lastIndex = 0;
+    let filter: RegExpExecArray | null;
+    while ((filter = FILTER_RE.exec(interpolation[0])) !== null) {
+      const name = filter[1];
+      const isLinx = name in LINX_FILTERS;
+      const isVue = name in VUE_FILTERS;
+      if (isLinx === isVue) {
+        continue;
+      }
+
+      const start = interpolation.index + filter.index + filter[0].indexOf(name);
+      if (inRaw && isLinx) {
+        problems.push({
+          code: 'filter-wrong-region',
+          severity: 'warning',
+          message: `\`${name}\` é filtro do Liquid, processado no servidor — dentro de {% raw %} ele não roda e o texto sai literal.`,
+          start,
+          end: start + name.length,
+        });
+      } else if (!inRaw && isVue) {
+        problems.push({
+          code: 'filter-wrong-region',
+          severity: 'warning',
+          message: `\`${name}\` é filtro do Vue e só funciona dentro de {% raw %}. Aqui o Liquid não o conhece.`,
+          start,
+          end: start + name.length,
+        });
+      }
+    }
+  }
+
+  return problems;
+}
+
 export function analyze(text: string, regions: Region[] = scan(text)): Problem[] {
+  const rawProblems = checkUnbalancedRaw(text);
+
+  // Um raw desbalanceado desloca a fronteira de todas as regiões seguintes, e aí
+  // metade do arquivo muda de linguagem. Reportar blocos em cima disso produziria
+  // uma cascata de erros derivados que escondem a causa única.
+  const blockProblems = rawProblems.some((p) => p.severity === 'error')
+    ? []
+    : checkUnbalancedBlocks(text, regions);
+
   return [
-    ...checkUnbalancedRaw(text),
+    ...rawProblems,
+    ...blockProblems,
     ...checkCommentInRaw(text, regions),
     ...checkLiquidInHtmlComment(text, regions),
+    ...checkFilterRegion(text, regions),
   ].sort((a, b) => a.start - b.start);
 }

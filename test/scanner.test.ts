@@ -1,15 +1,22 @@
-import { test, describe } from 'node:test';
+import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { scan, regionAt, regionsByLine, findLiquidTags } from '../src/core/scanner.ts';
-import { read, offsetOfLine, lineAt, allTemplates } from './helpers.ts';
+import {
+  read,
+  offsetOfLine,
+  lineAt,
+  allTemplates,
+  corpusDescribe,
+  forEachTemplate,
+} from './helpers.ts';
 
 /** Tipo de região no primeiro caractere não-branco da linha 1-indexada. */
 function kindAtLine(text: string, line: number): string {
   return regionsByLine(text)[line - 1];
 }
 
-describe('scanner — camada Liquid', () => {
+corpusDescribe('scanner — camada Liquid', () => {
   test('arquivo inteiramente envolto em raw: conteúdo é raw, as tags são liquid', () => {
     const text = read('Pages/OnePageCheckout/components/basket.template');
     const regions = scan(text);
@@ -100,7 +107,7 @@ describe('scanner — camada Liquid', () => {
   });
 });
 
-describe('scanner — camada HTML', () => {
+corpusDescribe('scanner — camada HTML', () => {
   test('corpo de <script> com Liquid massivo vira região script', () => {
     const text = read('Pages/OnePageCheckout/includes/PageHeader.template');
 
@@ -119,15 +126,14 @@ describe('scanner — camada HTML', () => {
   });
 });
 
-describe('scanner — invariantes sobre o corpus inteiro', () => {
-  const templates = allTemplates();
-
+corpusDescribe('scanner — invariantes sobre o corpus inteiro', () => {
   test('o corpus tem os 27 arquivos esperados', () => {
-    assert.equal(templates.length, 27);
+    assert.equal(allTemplates().length, 27);
   });
 
-  for (const file of templates) {
-    test(`${file}: regiões cobrem o texto sem buraco nem sobreposição`, () => {
+  forEachTemplate(
+    (file) => `${file}: regiões cobrem o texto sem buraco nem sobreposição`,
+    (file) => {
       const text = read(file);
       const regions = scan(text);
 
@@ -146,6 +152,6 @@ describe('scanner — invariantes sobre o corpus inteiro', () => {
         );
         assert.ok(regions[i].end > regions[i].start, `região ${i} não pode ser vazia`);
       }
-    });
-  }
+    },
+  );
 });

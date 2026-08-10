@@ -56,8 +56,8 @@
   ],
   "folding": {
     "markers": {
-      "start": "^\\s*(?:<!--\\s*#region\\b|\\{%-?\\s*(?:raw|comment)\\s*-?%\\})",
-      "end": "^\\s*(?:<!--\\s*#endregion\\b|\\{%-?\\s*(?:endraw|endcomment)\\s*-?%\\})"
+      "start": "^\\s*<!--\\s*#region\\b",
+      "end": "^\\s*<!--\\s*#endregion\\b"
     }
   }
 }

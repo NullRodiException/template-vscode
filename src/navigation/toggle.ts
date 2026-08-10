@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 
 import { findCounterpart } from '../core/theme.ts';
+import { isOnDisk } from '../config.ts';
 
 /**
  * Alterna entre `components/X.template` e `Scripts/components/X.js`.
@@ -13,7 +14,7 @@ import { findCounterpart } from '../core/theme.ts';
  */
 export async function toggleTemplateScript(): Promise<void> {
   const editor = vscode.window.activeTextEditor;
-  if (!editor) {
+  if (!editor || !isOnDisk(editor.document)) {
     return;
   }
 

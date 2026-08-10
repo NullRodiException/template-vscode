@@ -7,6 +7,17 @@
 
 import * as vscode from 'vscode';
 
+/**
+ * `true` quando o documento tem um arquivo real por trás.
+ *
+ * Resolver caminho, procurar `manifest.xml` e checar existência de include só
+ * fazem sentido aí. Num `untitled:` ou num documento de outro provedor, o
+ * `fsPath` é um caminho inventado que resolveria contra a pasta errada.
+ */
+export function isOnDisk(document: vscode.TextDocument): boolean {
+  return document.uri.scheme === 'file';
+}
+
 function setting(document: vscode.TextDocument, key: string): string | undefined {
   const value = vscode.workspace.getConfiguration('linxLiquid', document).get<string>(key, '');
   return value.trim() === '' ? undefined : value;

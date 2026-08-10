@@ -87,6 +87,9 @@ function makeVscodeStub() {
       registerDocumentFormattingEditProvider: registerLanguageFeature,
       registerDocumentRangeFormattingEditProvider: registerLanguageFeature,
       registerDocumentLinkProvider: registerLanguageFeature,
+      registerDefinitionProvider: registerLanguageFeature,
+      registerFoldingRangeProvider: registerLanguageFeature,
+      registerDocumentSymbolProvider: registerLanguageFeature,
       registerHoverProvider: registerLanguageFeature,
       registerCompletionItemProvider: registerLanguageFeature,
       registerCodeActionsProvider: registerLanguageFeature,
@@ -102,6 +105,7 @@ function makeVscodeStub() {
       onDidChangeTextDocument: noop,
       onDidCloseTextDocument: noop,
       onDidChangeConfiguration: noop,
+      onDidSaveTextDocument: noop,
       createFileSystemWatcher: () => ({
         onDidCreate: noop,
         onDidChange: noop,
@@ -165,7 +169,41 @@ function makeVscodeStub() {
         this.kind = kind;
       }
     },
-    CompletionItemKind: { File: 0, Property: 1, Function: 2 },
+    CompletionItemKind: { File: 0, Property: 1, Function: 2, Keyword: 3, Variable: 4 },
+    FoldingRange: class {
+      start: number;
+      end: number;
+      kind: unknown;
+      constructor(start: number, end: number, kind?: unknown) {
+        this.start = start;
+        this.end = end;
+        this.kind = kind;
+      }
+    },
+    FoldingRangeKind: { Comment: 1, Imports: 2, Region: 3 },
+    DocumentSymbol: class {
+      name: string;
+      detail: string;
+      kind: unknown;
+      range: unknown;
+      selectionRange: unknown;
+      constructor(name: string, detail: string, kind: unknown, range: unknown, selection: unknown) {
+        this.name = name;
+        this.detail = detail;
+        this.kind = kind;
+        this.range = range;
+        this.selectionRange = selection;
+      }
+    },
+    SymbolKind: { Class: 4, Module: 1, Variable: 12 },
+    Location: class {
+      uri: unknown;
+      range: unknown;
+      constructor(uri: unknown, range: unknown) {
+        this.uri = uri;
+        this.range = range;
+      }
+    },
     DocumentLink: class {
       range: unknown;
       target: unknown;
@@ -235,7 +273,10 @@ describe('bundle publicado', () => {
   });
 
   test('as features de linguagem são registradas para linx-liquid', () => {
-    assert.ok(registered.languages.length >= 6, 'formatação, links, hover, completion e code actions');
+    assert.ok(
+      registered.languages.length >= 9,
+      'formatação (2), dobra, links, definição, símbolos, hover, completion e code actions',
+    );
     assert.deepEqual(
       [...new Set(registered.languages)],
       ['linx-liquid'],

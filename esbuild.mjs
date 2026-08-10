@@ -10,8 +10,8 @@ const options = {
   format: 'cjs',
   platform: 'node',
   target: 'node18',
-  // .cjs explícito: o package.json declara "type": "module" por causa dos
-  // fontes ESM, mas o VS Code carrega a extensão com require().
+  // .cjs explícito: os fontes são ESM (imports com extensão .ts, import.meta nos
+  // testes), mas o VS Code carrega a extensão com require().
   outfile: 'dist/extension.cjs',
   external: ['vscode'],
   logLevel: 'info',

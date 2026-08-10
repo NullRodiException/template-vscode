@@ -19,7 +19,7 @@
  */
 
 import { isBlockTag, isEndTag, isMiddleTag, VOID_ELEMENTS } from '../core/liquidTags.ts';
-import { regionsByLine, type RegionKind } from '../core/scanner.ts';
+import { scan, regionsByLine, type Region, type RegionKind } from '../core/scanner.ts';
 
 export interface IndentOptions {
   insertSpaces: boolean;
@@ -338,9 +338,10 @@ const VERBATIM = -1;
 export function computeIndentation(
   text: string,
   options: IndentOptions = DEFAULT_OPTIONS,
+  regions: Region[] = scan(text),
 ): IndentEdit[] {
   const lines = text.split('\n');
-  const kinds = regionsByLine(text);
+  const kinds = regionsByLine(text, regions);
   const edits: IndentEdit[] = [];
 
   const stack: Frame[] = [];

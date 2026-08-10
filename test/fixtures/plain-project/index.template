@@ -1,0 +1,8 @@
+{% assign nome = "Rodrigo" %}
+{% assign idade = 30 %}
+
+{% if idade >= 18 %}
+  <p>{{ nome }} é maior de idade.</p>
+{% else %}
+  <p>{{ nome }} é menor de idade.</p>
+{% endif %}
