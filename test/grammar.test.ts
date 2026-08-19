@@ -7,7 +7,7 @@
  * É o único jeito de provar o highlight sem abrir o editor e olhar.
  */
 
-import { test, before } from 'node:test';
+import { test, describe, before, type TestContext } from 'node:test';
 import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -29,6 +29,7 @@ const OWN_GRAMMARS: Record<string, string> = {
   [MAIN_SCOPE]: 'syntaxes/linx-liquid.tmLanguage.json',
   'linx-liquid.injection.raw-escape': 'syntaxes/raw-escape.injection.json',
   'linx-liquid.injection.liquid': 'syntaxes/liquid.injection.json',
+  'linx-liquid.injection.vue-directive': 'syntaxes/vue-directive.injection.json',
 };
 
 let grammar: IGrammar | null;
@@ -61,7 +62,11 @@ before(async () => {
     },
     getInjections: (scopeName: string) =>
       scopeName === MAIN_SCOPE
-        ? ['linx-liquid.injection.raw-escape', 'linx-liquid.injection.liquid']
+        ? [
+            'linx-liquid.injection.raw-escape',
+            'linx-liquid.injection.liquid',
+            'linx-liquid.injection.vue-directive',
+          ]
         : undefined,
   });
 
@@ -119,9 +124,19 @@ function hasScope(scopes: string[], prefix: string): boolean {
   return scopes.some((s) => s === prefix || s.startsWith(`${prefix}.`));
 }
 
-/** Lê um arquivo do corpus e devolve um consultor de escopos por linha/trecho. */
-function inspect(file: string) {
-  const text = read(file);
+/**
+ * `true` quando quem tokenizou o trecho foi a gramática do JavaScript.
+ *
+ * O `include: source.js` não deixa um escopo `source.js` na pilha — como no
+ * `<script>` do próprio HTML, o que aparece são os escopos das regras dela
+ * (`variable.other.object.js`, `keyword.operator.….js`).
+ */
+function isJavaScript(scopes: string[]): boolean {
+  return scopes.some((s) => s.endsWith('.js'));
+}
+
+/** Consultor de escopos por linha/trecho sobre um texto qualquer. */
+function inspectText(text: string) {
   const tokens = tokenize(text);
   return {
     text,
@@ -132,6 +147,147 @@ function inspect(file: string) {
       tokens.some((t) => t.line === line && hasScope(t.scopes, prefix)),
   };
 }
+
+/** Lê um arquivo do corpus e devolve o mesmo consultor. */
+function inspect(file: string) {
+  return inspectText(read(file));
+}
+
+describe('gramática — diretivas do Vue', () => {
+  /**
+   * Fonte inline, não o corpus: as diretivas são o que mais aparece nos arquivos
+   * do dia a dia, e a cobertura precisa valer também num clone sem `ex/`.
+   *
+   * Sem a `text.html.basic` de verdade não existe o escopo `meta.tag` em que a
+   * injeção se pendura — sem ela o teste não testaria nada.
+   */
+  function inspectTag(t: TestContext, source: string): ReturnType<typeof inspectText> | undefined {
+    if (!hasBuiltins) {
+      t.skip('sem VS Code instalado, text.html.basic não carrega e a injeção não tem onde entrar');
+      return undefined;
+    }
+    return inspectText(source);
+  }
+
+  test('o nome da diretiva é keyword e o valor é JavaScript, não string', (t) => {
+    const html = inspectTag(t, '{% raw %}\n<div v-if="Basket.Items.length > 0"></div>\n{% endraw %}');
+    if (!html) {
+      return;
+    }
+    assert.ok(hasScope(html.scopes(2, 'v-if'), 'keyword.control.directive.vue'));
+    assert.ok(
+      hasScope(html.scopes(2, 'Basket'), 'meta.embedded.expression.vue'),
+      'o valor é expressão embutida',
+    );
+    assert.ok(isJavaScript(html.scopes(2, 'Basket')), 'com o JavaScript real dentro');
+    assert.ok(
+      !hasScope(html.scopes(2, 'Basket'), 'string.quoted'),
+      'sem a regra, o valor inteiro era uma string só',
+    );
+  });
+
+  test(': e @ separam o sinal do argumento', (t) => {
+    const html = inspectTag(t, '<button :class="{ ativo: on }" @click="fechar()"></button>');
+    if (!html) {
+      return;
+    }
+    assert.ok(hasScope(html.scopes(1, ':class'), 'keyword.control.directive.vue'), 'o : é o sinal');
+    assert.ok(hasScope(html.scopes(1, 'class="'), 'entity.other.attribute-name.vue'));
+    assert.ok(hasScope(html.scopes(1, '@'), 'keyword.control.directive.vue'));
+    assert.ok(hasScope(html.scopes(1, 'click'), 'entity.other.attribute-name.vue'));
+    assert.ok(hasScope(html.scopes(1, 'fechar'), 'entity.name.function.js'), 'a chamada é JS');
+  });
+
+  test('argumento e modificadores de v-on:change.prevent', (t) => {
+    const html = inspectTag(t, '<input v-on:change.stop.prevent="salvar" @keyup.enter="ok">');
+    if (!html) {
+      return;
+    }
+    assert.ok(hasScope(html.scopes(1, 'v-on'), 'keyword.control.directive.vue'));
+    assert.ok(hasScope(html.scopes(1, 'change'), 'entity.other.attribute-name.vue'));
+    assert.ok(
+      hasScope(html.scopes(1, '.stop.prevent'), 'entity.other.attribute-name.modifier.vue'),
+      'a cadeia de modificadores sai num token só',
+    );
+    assert.ok(hasScope(html.scopes(1, '.enter'), 'entity.other.attribute-name.modifier.vue'));
+  });
+
+  test('v-for: o in é operador e os aliases são variáveis', (t) => {
+    const html = inspectTag(t, '<li v-for="(item, i) in Basket.Items" :key="item.Id"></li>');
+    if (!html) {
+      return;
+    }
+    assert.ok(hasScope(html.scopes(1, 'item,'), 'variable.other'), 'o alias é variável');
+    assert.ok(hasScope(html.scopes(1, 'in Basket'), 'keyword.operator'), 'o in é operador do JS');
+    assert.ok(hasScope(html.scopes(1, 'item.Id'), 'meta.embedded.expression.vue'));
+  });
+
+  test('diretiva sem valor também é reconhecida', (t) => {
+    const html = inspectTag(t, '<span v-else v-cloak #footer></span>');
+    if (!html) {
+      return;
+    }
+    assert.ok(hasScope(html.scopes(1, 'v-else'), 'keyword.control.directive.vue'));
+    assert.ok(hasScope(html.scopes(1, 'v-cloak'), 'keyword.control.directive.vue'));
+    assert.ok(hasScope(html.scopes(1, '#'), 'keyword.control.directive.vue'));
+    assert.ok(hasScope(html.scopes(1, 'footer'), 'entity.other.attribute-name.vue'));
+  });
+
+  test('vale fora de {% raw %} e em linha de continuação', (t) => {
+    // 18 dos 60 arquivos do corpus que usam diretiva não têm raw nenhum, e o
+    // atributo em linha própria é a saída do próprio formatador da extensão.
+    const html = inspectTag(t, '<div\n:class="{ aberto: ativo }"\n@click="fechar">');
+    if (!html) {
+      return;
+    }
+    assert.ok(!html.lineHas(2, 'meta.embedded.block.raw.linx'), 'pré-condição: fora de raw');
+    assert.ok(hasScope(html.scopes(2, ':'), 'keyword.control.directive.vue'), 'na coluna 0');
+    assert.ok(hasScope(html.scopes(3, '@'), 'keyword.control.directive.vue'));
+  });
+
+  test('atributo comum não vira diretiva', (t) => {
+    const html = inspectTag(t, '<div title="use @click= aqui" data-v-if="nao" href="a:b=1"></div>');
+    if (!html) {
+      return;
+    }
+    assert.ok(
+      !html.lineHas(1, 'meta.directive.vue'),
+      'nem o @click dentro do valor, nem data-v-if, nem o a:b=1 do href',
+    );
+  });
+
+  test('os dois-pontos do {% include ... with context %} continuam Liquid', (t) => {
+    const html = inspectTag(t, "{% include /Components/BuyButton/index with context BuyText: 'COMPRE' %}");
+    if (!html) {
+      return;
+    }
+    assert.ok(!html.lineHas(1, 'meta.directive.vue'), 'a injeção fica fora de meta.tag.liquid');
+    assert.ok(html.lineHas(1, 'keyword.control.liquid'));
+  });
+
+  test('o Liquid dentro do valor da diretiva continua sendo Liquid', (t) => {
+    // register.template:75 — v-model="AddOrSetCustomer.{{ field.PropertyName }}"
+    const html = inspectTag(t, '<input v-model="AddOrSetCustomer.{{ field.PropertyName }}">');
+    if (!html) {
+      return;
+    }
+    const field = html.scopes(1, 'field');
+    assert.ok(hasScope(field, 'meta.embedded.expression.liquid'), 'a injeção do Liquid tem prioridade');
+    assert.ok(!isJavaScript(field), 'não é lido como JavaScript');
+  });
+
+  test('valor com aspas simples fecha nas aspas simples', (t) => {
+    const html = inspectTag(t, `<span :title='nome' class="depois"></span>`);
+    if (!html) {
+      return;
+    }
+    assert.ok(hasScope(html.scopes(1, 'nome'), 'meta.embedded.expression.vue'));
+    assert.ok(
+      hasScope(html.scopes(1, 'class'), 'entity.other.attribute-name.html'),
+      'o atributo seguinte continua sendo atributo HTML comum',
+    );
+  });
+});
 
 corpusDescribe('gramática — alternância raw ↔ Liquid', () => {
   test('dentro de {% raw %} os {{ }} são mustaches do Vue', () => {

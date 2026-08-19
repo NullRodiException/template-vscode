@@ -1,0 +1,2 @@
+<button class="arrow arrow-prev" aria-label="Anterior"></button>
+<button class="arrow arrow-next" aria-label="Próximo"></button>

@@ -46,19 +46,41 @@ export function clearThemeCache(): void {
   themeCache.clear();
 }
 
+function isDirectory(target: string): boolean {
+  try {
+    return fs.statSync(target).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+/** Nome da pasta que é a raiz do tema no repositório de sites. */
+const THEME_DIR = 'html';
+
 /**
- * Sobe a partir do arquivo até encontrar um diretório que contenha `Pages/`.
- * Para no limite do sistema de arquivos.
+ * Sobe a partir do arquivo até encontrar a raiz do tema. Para no limite do
+ * sistema de arquivos.
+ *
+ * Duas árvores chegam aqui, e o sinal de raiz é diferente em cada uma:
+ *
+ *  - **widget avulso** — a raiz é a pasta que contém `Pages/`.
+ *  - **repositório de sites** — cada site tem `<site>/html/`, e é dela que
+ *    contam `{% include /Components/… %}` e `| themepath`. Nem todo site tem
+ *    `Pages/` (há os que só levam `Components/`), então quem identifica a raiz
+ *    é o nome da pasta. Editando um arquivo fora de `html/` — em `src/scss/`,
+ *    por exemplo — a raiz ainda é a `html/` irmã.
  */
 export function findThemeRoot(fromPath: string, override?: string): string | undefined {
   if (override) {
     return path.resolve(override);
   }
-  let dir = fs.existsSync(fromPath) && fs.statSync(fromPath).isDirectory() ? fromPath : path.dirname(fromPath);
+  let dir = isDirectory(fromPath) ? fromPath : path.dirname(fromPath);
   for (let depth = 0; depth < 32; depth++) {
-    const pages = path.join(dir, 'Pages');
-    if (fs.existsSync(pages) && fs.statSync(pages).isDirectory()) {
+    if (isDirectory(path.join(dir, 'Pages')) || path.basename(dir).toLowerCase() === THEME_DIR) {
       return dir;
+    }
+    if (isDirectory(path.join(dir, THEME_DIR))) {
+      return path.join(dir, THEME_DIR);
     }
     const parent = path.dirname(dir);
     if (parent === dir) {

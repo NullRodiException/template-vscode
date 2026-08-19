@@ -1,0 +1,63 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Linx Liquid — diretivas do Vue",
+  "scopeName": "linx-liquid.injection.vue-directive",
+  "injectionSelector": "L:text.html.linx-liquid meta.tag -meta.tag.liquid -meta.tag.custom.linx.liquid -string -comment",
+  "comment": [
+    "Sem esta injeção as diretivas caem no atributo genérico do text.html.basic:",
+    "o nome vira meta.attribute.unrecognized.v-if.html — a mesma cor de um data-x —",
+    "e o valor inteiro vira uma string só, sem realce nenhum do JavaScript.",
+    "É injeção, e não regra da gramática principal, por dois motivos:",
+    "  1. as diretivas aparecem dentro e fora de {% raw %} (18 dos 60 arquivos do",
+    "     corpus que as usam não têm raw nenhum), e os dois contextos delegam para",
+    "     o text.html.basic — uma regra em cada lugar seria a mesma coisa duas vezes;",
+    "  2. o L: dá prioridade sobre a regra de atributo do HTML, que casaria antes.",
+    "O -string mantém a injeção fora dos valores: o @click que aparece dentro de uma",
+    "string JS é texto, não diretiva. O -meta.tag.liquid a mantém fora de {% ... %},",
+    "onde `where:'...'` e `BuyText: 'x'` têm dois-pontos que não são v-bind."
+  ],
+  "patterns": [{ "include": "#directive-with-value" }, { "include": "#directive-flag" }],
+  "repository": {
+    "directive-with-value": {
+      "name": "meta.directive.vue",
+      "comment": [
+        "Cobre v-if=, v-on:change.prevent=, :class=, @click.stop= e #slot=.",
+        "O argumento exclui o ponto para os modificadores sobrarem para o grupo 5;",
+        "[] entra por causa do argumento dinâmico :[chave]=.",
+        "O lookbehind barra data-v-if e o v- no meio de uma palavra. Ele aceita começo",
+        "de linha porque neste corpus o atributo costuma vir em linha de continuação.",
+        "O fecha-aspas é backreference (\\7): valor com aspas simples é comum quando o",
+        "conteúdo tem aspas duplas."
+      ],
+      "begin": "(?<![\\w\"'-])(?:(v-[a-zA-Z][\\w-]*)(?::([\\w\\[\\]$-]+))?|([:@#])([\\w\\[\\]$-]+))((?:\\.[\\w-]+)*)\\s*(=)\\s*([\"'])",
+      "beginCaptures": {
+        "1": { "name": "keyword.control.directive.vue" },
+        "2": { "name": "entity.other.attribute-name.vue" },
+        "3": { "name": "keyword.control.directive.vue" },
+        "4": { "name": "entity.other.attribute-name.vue" },
+        "5": { "name": "entity.other.attribute-name.modifier.vue" },
+        "6": { "name": "punctuation.separator.key-value.html" },
+        "7": { "name": "punctuation.definition.string.begin.html" }
+      },
+      "end": "\\7",
+      "endCaptures": { "0": { "name": "punctuation.definition.string.end.html" } },
+      "contentName": "meta.embedded.expression.vue",
+      "patterns": [
+        { "include": "text.html.linx-liquid#vue-filter" },
+        { "include": "source.js" }
+      ]
+    },
+
+    "directive-flag": {
+      "comment": "Diretiva sem valor: v-else, v-cloak, #footer. Vem depois da regra com valor, que ganha quando as duas casam na mesma posição.",
+      "name": "meta.directive.vue",
+      "match": "(?<![\\w\"'-])(?:(v-[a-zA-Z][\\w-]*)|([:@#])([\\w\\[\\]$-]+))((?:\\.[\\w-]+)*)",
+      "captures": {
+        "1": { "name": "keyword.control.directive.vue" },
+        "2": { "name": "keyword.control.directive.vue" },
+        "3": { "name": "entity.other.attribute-name.vue" },
+        "4": { "name": "entity.other.attribute-name.modifier.vue" }
+      }
+    }
+  }
+}

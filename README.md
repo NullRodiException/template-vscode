@@ -24,6 +24,8 @@ Gramática própria que modela a alternância raw ↔ Liquid, com uma injeção 
 
 Distingue o filtro `| currency` do `||` do JavaScript, e trata `{% comment %}` como região opaca (no corpus há um par `{% capture %}/{% endcapture %}` inteiro comentado).
 
+As **diretivas do Vue** têm escopo próprio, dentro e fora de `{% raw %}`: `v-if`, `v-for`, `:class`, `@click.prevent`, `#footer`. O valor delas é tratado como JavaScript — sem isso, `v-if="Basket.Items.length > 0"` era uma string monocromática, igual a um `data-x` qualquer. O `{{ }}` do Liquid dentro do valor continua sendo Liquid.
+
 ### Indentação e formatação
 
 **O formatador só mexe na indentação.** Cada linha produz no máximo um edit, restrito ao trecho antes do primeiro caractere não-branco — é estruturalmente impossível corromper o arquivo.
@@ -50,11 +52,13 @@ Pressionar de novo com o cursor dentro do bloco descomenta.
 
 | Atalho | O que faz |
 |---|---|
-| `Ctrl+Alt+T` | Lista todos os `.template` do workspace, agrupados por pasta |
+| `Ctrl+Alt+T` | Lista todos os `.template` do workspace, agrupados por pasta, começando pelo tema do arquivo aberto |
 | `Ctrl+Click` ou `F12` | Abre o arquivo de um `{% include %}`, de um `template="…"` ou de um `\| themepath` |
 | `Alt+O` | Alterna entre `components/X.template` e `Scripts/components/X.js` |
 
 A resolução cobre os dois esquemas de caminho que convivem no projeto: o de **fonte** (`/Pages/OnePageCheckout/…`, igual à árvore local) e o de **deploy** (`~/Custom/Content/Widgets/<folder>/…`), traduzido pelo atributo `folder` do `manifest.xml`. `F12` e `Alt+F12` (Peek) usam o mesmo resolvedor do Ctrl+Click.
+
+A raiz de onde esses caminhos contam é descoberta subindo os diretórios: a pasta que contém `Pages/` no widget avulso, ou a `<site>/html/` no repositório de sites — inclusive nos sites que só têm `Components/`, e a partir de arquivos fora dela (`src/scss/…`, por exemplo).
 
 O Outline e os breadcrumbs listam os `<template id="tpl-…">`, os `<script>`/`<style>` e os `{% capture %}`/`{% assign %}` — o que se procura num arquivo de 240 linhas.
 
@@ -73,7 +77,7 @@ Um `{% raw %}` desbalanceado suprime a checagem de blocos: sem o `{% endraw %}` 
 
 ### Hover, autocomplete e snippets
 
-Passar o mouse sobre as tags e filtros da Linx mostra assinatura, descrição e um exemplo real. O autocomplete oferece:
+Passar o mouse sobre as tags e filtros da Linx mostra assinatura, descrição e um exemplo real. O mesmo vale para as diretivas do Vue — inclusive nos atalhos, em que `:class` documenta o `v-bind` e `@click` o `v-on`. O autocomplete oferece:
 
 - os caminhos de `{% include %}`;
 - as propriedades de `{{ Widget. }}` — unindo as declaradas no `manifest.xml` com as efetivamente usadas nos templates, porque as duas listas costumam divergir;
@@ -86,7 +90,7 @@ Snippets: `lxcomponent` (esqueleto de componente novo), `forjson` (laço gerando
 
 | Opção | Padrão | Para quê |
 |---|---|---|
-| `linxLiquid.themeRoot` | detecção automática | Raiz do tema (a pasta que contém `Pages/`). Só defina se a detecção falhar |
+| `linxLiquid.themeRoot` | detecção automática | Raiz do tema (a pasta que contém `Pages/`, ou a `html/` do site). Só defina se a detecção falhar |
 | `linxLiquid.sharedThemeRoot` | vazio | Raiz do tema compartilhado, para o filtro `\| sharedthemepath` |
 | `linxLiquid.diagnostics.enabled` | `true` | Liga/desliga os diagnósticos |
 | `linxLiquid.format.attributeIndent` | `oneLevel` | `preserve` mantém as linhas de continuação de atributo como estão |

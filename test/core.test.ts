@@ -5,7 +5,7 @@ import * as path from 'node:path';
 import { toggleBlockComment, type TextEditOp } from '../src/core/comment.ts';
 import { findPathReferences } from '../src/core/references.ts';
 import { analyze } from '../src/core/diagnostics.ts';
-import { BLOCK_TAGS } from '../src/core/liquidTags.ts';
+import { BLOCK_TAGS, VUE_DIRECTIVES, directiveName } from '../src/core/liquidTags.ts';
 import {
   resolveIncludePath,
   resolveDeployPath,
@@ -209,6 +209,45 @@ describe('include fora de um tema Linx', () => {
   test('arquivo inexistente continua sem resolver', () => {
     assert.equal(resolveIncludePath(`${BASE}/nao-existe`, from, undefined, [REPO_ROOT]), undefined);
     assert.equal(resolveIncludePath('./nao-existe', from), undefined);
+  });
+});
+
+describe('repositório de sites: a raiz do tema é a pasta html/', () => {
+  // test/fixtures/site-project/ imita um site do repositório de projetos:
+  // `<site>/html/` com Components/ e sem Pages/, mais um `src/scss/` irmão.
+  const root = fixture('site-project/html');
+  const nested = fixture('site-project/html/Components/ProductMedias/index.template');
+
+  test('sem Pages/, o nome da pasta identifica a raiz', () => {
+    assert.equal(findThemeRoot(nested), root);
+    assert.equal(findThemeRoot(fixture('site-project/html/product.line.template')), root);
+  });
+
+  test('a partir de um arquivo fora de html/, a raiz é a html/ irmã', () => {
+    assert.equal(findThemeRoot(fixture('site-project/src/scss/produto/_medias.scss')), root);
+  });
+
+  test('include conta da raiz, não da pasta do arquivo', () => {
+    assert.equal(
+      resolveIncludePath('/Components/Arrows/index', nested),
+      fixture('site-project/html/Components/Arrows/index.template'),
+    );
+    assert.equal(
+      resolveIncludePath('/Components/ProductMedias/index', fixture('site-project/html/product.line.template')),
+      nested,
+    );
+    assert.equal(resolveIncludePath('/Components/NaoExiste/index', nested), undefined);
+  });
+
+  test('| themepath resolve contra a mesma raiz', () => {
+    assert.equal(
+      resolveThemePath('/Components/Arrows/index.template?v=2', nested),
+      fixture('site-project/html/Components/Arrows/index.template'),
+    );
+  });
+
+  test('a configuração themeRoot continua tendo a última palavra', () => {
+    assert.equal(findThemeRoot(nested, fixture('site-project')), fixture('site-project'));
   });
 });
 
@@ -485,6 +524,38 @@ describe('diagnósticos — filtro na região errada', () => {
 
   test('dentro de {% comment %} nada é reportado', () => {
     assert.deepEqual(filters('{% comment %}{{ x | currency }}{% endcomment %}'), []);
+  });
+});
+
+describe('diretivas do Vue', () => {
+  test('o atalho resolve para a diretiva que abrevia', () => {
+    assert.equal(directiveName(':class'), 'v-bind');
+    assert.equal(directiveName(':[chave]'), 'v-bind');
+    assert.equal(directiveName('@click'), 'v-on');
+    assert.equal(directiveName('#footer'), 'v-slot');
+  });
+
+  test('argumento e modificadores não mudam o nome', () => {
+    assert.equal(directiveName('v-on:change.stop.prevent'), 'v-on');
+    assert.equal(directiveName('v-bind:src'), 'v-bind');
+    assert.equal(directiveName('@keyup.enter'), 'v-on');
+    assert.equal(directiveName('v-else-if'), 'v-else-if', 'o hífen do nome não é separador');
+  });
+
+  test('o que não é diretiva não vira uma', () => {
+    // O sinal sozinho aparece em `{% include … BuyText: 'x' %}` e em `a:b` de href.
+    assert.equal(directiveName(':'), undefined);
+    assert.equal(directiveName('class'), undefined);
+    assert.equal(directiveName('data-v-if'), undefined);
+    assert.equal(directiveName('v-naoexiste'), undefined, 'diretiva de terceiro sem entrada na tabela');
+  });
+
+  test('toda entrada da tabela está completa', () => {
+    for (const [name, entry] of Object.entries(VUE_DIRECTIVES)) {
+      assert.ok(entry.signature.includes(name), `${name}: a assinatura cita a diretiva`);
+      assert.ok(entry.doc.length > 20, `${name}: sem documentação`);
+      assert.ok(entry.example.includes('<'), `${name}: o exemplo é um trecho de HTML`);
+    }
   });
 });
 
