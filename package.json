@@ -2,7 +2,7 @@
   "name": "linx-liquid-template",
   "displayName": "Linx Liquid Template",
   "description": "Suporte a arquivos .template do Liquid da Linx Commerce: highlight, indentação, comentar bloco, navegação e diagnósticos.",
-  "version": "0.3.0",
+  "version": "0.5.0",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -148,7 +148,17 @@
           ],
           "default": "oneLevel",
           "markdownDescription": "Como indentar linhas de continuação de atributos (uma tag `<input` cujos atributos seguem nas linhas abaixo). `oneLevel` recua um nível; `preserve` mantém a indentação original dessas linhas."
+        },
+        "linxLiquid.autoClosingTags": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Fecha a tag sozinho: digitar `>` em `<div` escreve `</div>` logo adiante, com o cursor no meio. É o equivalente ao `html.autoClosingTags`, que não alcança esta linguagem."
         }
+      }
+    },
+    "configurationDefaults": {
+      "emmet.includeLanguages": {
+        "linx-liquid": "html"
       }
     }
   },

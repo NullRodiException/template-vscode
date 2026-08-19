@@ -82,7 +82,15 @@ Passar o mouse sobre as tags e filtros da Linx mostra assinatura, descrição e 
 - os caminhos de `{% include %}`;
 - as propriedades de `{{ Widget. }}` — unindo as declaradas no `manifest.xml` com as efetivamente usadas nos templates, porque as duas listas costumam divergir;
 - o `{% end… %}` do bloco aberto mais interno, com a linha em que ele abriu;
-- as tags do dialeto e os objetos globais do servidor (`Config`, `Basket`, `Checkout`, `forloop`…), sempre respeitando a fronteira do `{% raw %}` — dentro dele nada disso existe.
+- as tags do dialeto e os objetos globais do servidor (`Config`, `Basket`, `Checkout`, `forloop`…), sempre respeitando a fronteira do `{% raw %}` — dentro dele nada disso existe;
+- os elementos de HTML depois do `<`, escrevendo a tag inteira (`<div></div>`, com o cursor no meio), e o fechamento do elemento aberto mais interno depois do `</`;
+- os atributos do elemento, seguidos dos globais (`class`, `id`, `role`, `aria-*`, `data-`) e das diretivas do Vue, e os valores de lista fechada (`type` de `<input>`, `rel` de `<link>`, `target`, `method`, `loading`) já dentro das aspas.
+
+O HTML fica de fora do corpo de `<script>` e `<style>`, onde `a < b` é comparação e não abertura de tag — menos no script que carrega template do Vue (`type="text/x-template"`), cujo corpo é marcação.
+
+Emmet vem ligado para a linguagem: `h1` + Tab expande para `<h1></h1>`, e `ul>li*3` vira a lista inteira. Se você já tem um `emmet.includeLanguages` próprio nas suas configurações, ele substitui o padrão da extensão inteiro — rode **Linx: Configurar workspace** e o mapa mesclado vai para o `.vscode/settings.json`.
+
+Digitar `>` fecha a tag sozinho (`<div` vira `<div></div>` com o cursor no meio), o que o VS Code só faz nas linguagens do serviço de HTML. `linxLiquid.autoClosingTags` desliga.
 
 Snippets: `lxcomponent` (esqueleto de componente novo), `forjson` (laço gerando array JSON dentro de `<script>`), e um para cada tag proprietária.
 
@@ -94,6 +102,7 @@ Snippets: `lxcomponent` (esqueleto de componente novo), `forjson` (laço gerando
 | `linxLiquid.sharedThemeRoot` | vazio | Raiz do tema compartilhado, para o filtro `\| sharedthemepath` |
 | `linxLiquid.diagnostics.enabled` | `true` | Liga/desliga os diagnósticos |
 | `linxLiquid.format.attributeIndent` | `oneLevel` | `preserve` mantém as linhas de continuação de atributo como estão |
+| `linxLiquid.autoClosingTags` | `true` | Digitar `>` escreve a tag de fechamento |
 
 Formatar ao salvar vem **desligado**. Para ligar só nesta linguagem e só neste workspace, rode **Linx: Configurar workspace** na paleta de comandos.
 
@@ -129,8 +138,8 @@ As garantias mais importantes:
 
 ```
 src/core/       scanner de regiões, emparelhamento de blocos, tabela do dialeto,
-                resolução de caminhos, símbolos, dobra, comentário e diagnósticos
-                — tudo puro, sem importar 'vscode'
+                tabela do HTML, resolução de caminhos, símbolos, dobra,
+                comentário e diagnósticos — tudo puro, sem importar 'vscode'
 src/format/     indentador (puro) + providers de formatação e dobra
 src/navigation/ quick pick, links, definição, símbolos, toggle template↔js
 syntaxes/       gramática principal + duas injeções

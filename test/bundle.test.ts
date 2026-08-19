@@ -26,6 +26,7 @@ interface Manifest {
     snippets: { path: string }[];
     languages: { configuration: string }[];
     configuration: { properties: Record<string, unknown> };
+    configurationDefaults: Record<string, unknown>;
   };
 }
 
@@ -339,8 +340,17 @@ describe('manifesto', () => {
       'linxLiquid.sharedThemeRoot',
       'linxLiquid.diagnostics.enabled',
       'linxLiquid.format.attributeIndent',
+      'linxLiquid.autoClosingTags',
     ]) {
       assert.ok(declared.includes(key), `${key} precisa aparecer nas configurações da extensão`);
     }
+  });
+
+  test('o Emmet vem mapeado para a linguagem', () => {
+    // Sem isto o Emmet não conhece `.template` e `h1`+Tab não expande: ele só
+    // olha as linguagens dele e as declaradas em `emmet.includeLanguages`.
+    assert.deepEqual(manifest.contributes.configurationDefaults['emmet.includeLanguages'], {
+      'linx-liquid': 'html',
+    });
   });
 });

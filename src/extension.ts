@@ -7,6 +7,7 @@ import { registerSymbols } from './navigation/symbols.ts';
 import { registerDiagnostics } from './diagnostics.ts';
 import { registerHover } from './hover.ts';
 import { registerCompletion } from './completion.ts';
+import { registerAutoCloseTags } from './autoClose.ts';
 import { openTemplateQuickPick } from './navigation/quickOpen.ts';
 import { toggleTemplateScript } from './navigation/toggle.ts';
 import { toggleBlockComment } from './core/comment.ts';
@@ -57,7 +58,7 @@ async function toggleComment(): Promise<void> {
 }
 
 /**
- * Liga `formatOnSave` para esta linguagem no workspace.
+ * Liga `formatOnSave` e o Emmet para esta linguagem no workspace.
  *
  * Precisa ser explícito: `configurationDefaults` do manifesto perde para as
  * configurações globais do usuário, então só um `.vscode/settings.json` do
@@ -79,8 +80,22 @@ async function setupWorkspace(extensionId: string): Promise<void> {
     { 'editor.formatOnSave': true, 'editor.defaultFormatter': extensionId },
     vscode.ConfigurationTarget.Workspace,
   );
+
+  // Quem já tem um `emmet.includeLanguages` próprio nunca vê o padrão do
+  // manifesto — a opção é um objeto, e o valor do usuário substitui o default
+  // inteiro em vez de se somar a ele. Grava o mapa mesclado, sem perder o que
+  // já estava lá.
+  const emmet = config.get<Record<string, string>>('emmet.includeLanguages') ?? {};
+  if (emmet[LANGUAGE_ID] !== 'html') {
+    await config.update(
+      'emmet.includeLanguages',
+      { ...emmet, [LANGUAGE_ID]: 'html' },
+      vscode.ConfigurationTarget.Workspace,
+    );
+  }
+
   void vscode.window.showInformationMessage(
-    'Arquivos .template passam a ser formatados ao salvar neste workspace.',
+    'Arquivos .template passam a ser formatados ao salvar neste workspace, e o Emmet passa a expandir neles.',
   );
 }
 
@@ -92,6 +107,7 @@ export function activate(context: vscode.ExtensionContext): void {
   const refreshDiagnostics = registerDiagnostics(context);
   registerHover(context);
   registerCompletion(context);
+  registerAutoCloseTags(context);
 
   context.subscriptions.push(
     vscode.commands.registerCommand('linxLiquid.openTemplate', openTemplateQuickPick),

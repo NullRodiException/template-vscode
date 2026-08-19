@@ -355,6 +355,136 @@ export function directiveName(attribute: string): string | undefined {
   return name in VUE_DIRECTIVES ? name : undefined;
 }
 
+
+/**
+ * Como cada diretiva entra no arquivo pelo completion, em sintaxe de snippet.
+ *
+ * O que não está aqui entra como `nome="$1"`, com o cursor já dentro das aspas.
+ * As quatro primeiras não levam valor, e `v-for` puxa o `:key` junto porque uma
+ * lista sem ele rerenderiza errado — é o erro que mais aparece na revisão.
+ */
+export const DIRECTIVE_SNIPPETS: Record<string, string> = {
+  'v-else': 'v-else',
+  'v-cloak': 'v-cloak',
+  'v-once': 'v-once',
+  'v-pre': 'v-pre',
+  'v-bind': 'v-bind:${1:atributo}="${2:expressão}"',
+  'v-on': 'v-on:${1:evento}="${2:expressão}"',
+  'v-slot': 'v-slot:${1:nome}',
+  'v-for': 'v-for="${1:item} in ${2:lista}" :key="${3:item.Id}"',
+};
+
+/**
+ * Atributos que costumam vir ligados com `:` — `v-bind` com argumento.
+ *
+ * Não é a lista de atributos do HTML: o `:` aceita qualquer um, inclusive os
+ * que um componente inventa. É o conjunto que paga o completion; o resto
+ * continua sendo digitado à mão sem perder nada.
+ */
+export const VUE_BOUND_ATTRIBUTES: Record<string, string> = {
+  class: 'classe condicional: objeto `{ ativo: cond }`, array ou string',
+  style: 'estilo inline a partir de um objeto',
+  key: 'identidade do item dentro de um `v-for`',
+  ref: 'nome pelo qual o elemento aparece em `$refs`',
+  src: 'origem da imagem, do iframe ou do script',
+  href: 'destino do link',
+  alt: 'texto alternativo da imagem',
+  title: 'tooltip do elemento',
+  id: 'id calculado — útil para casar `label[for]` dentro de um `v-for`',
+  value: 'valor do campo, quando não se usa `v-model`',
+  placeholder: 'texto de exemplo do campo',
+  type: 'tipo do input',
+  name: 'nome do campo no formulário',
+  disabled: 'booleano: o atributo some do HTML quando a expressão é falsa',
+  checked: 'booleano do checkbox ou do radio',
+  readonly: 'booleano: campo só de leitura',
+  selected: 'booleano da option',
+};
+
+/** Eventos de DOM mais escutados com `@` — `v-on` com argumento. */
+export const VUE_EVENTS: Record<string, string> = {
+  click: 'clique; `.prevent` cancela o padrão e `.stop` a propagação',
+  dblclick: 'clique duplo',
+  submit: 'envio do formulário — quase sempre com `.prevent`',
+  input: 'a cada tecla, com o valor já atualizado',
+  change: 'ao sair do campo alterado, ou ao trocar a option',
+  focus: 'o campo ganhou o foco',
+  blur: 'o campo perdeu o foco',
+  keyup: 'tecla solta; `.enter` e `.esc` filtram qual',
+  keydown: 'tecla pressionada',
+  mouseenter: 'o ponteiro entrou no elemento',
+  mouseleave: 'o ponteiro saiu do elemento',
+  mouseover: 'o ponteiro passou por cima, inclusive dos filhos',
+  scroll: 'rolagem do elemento',
+  load: 'a imagem ou o iframe terminou de carregar',
+  error: 'a imagem falhou — o gancho para trocar por um placeholder',
+};
+
+/** Onde o cursor está escrevendo um atributo dentro de uma tag aberta. */
+export interface AttributeSlot {
+  /** O que já foi digitado, com o sinal: `:c`, `@cli`, `v-i`, ou `''`. */
+  word: string;
+  /** Offset em que `word` começa — o trecho que o completion substitui. */
+  start: number;
+}
+
+/** Caracteres que um nome de atributo aceita, incluindo sinal e modificadores. */
+const ATTRIBUTE_WORD_RE = /[\w:@#.$[\]-]*$/;
+
+/**
+ * Posição de atributo em que o cursor está, ou `undefined` se não for uma.
+ *
+ * O `wordPattern` da linguagem corta `:` e `@`, então quem completa `:class`
+ * precisa saber sozinho onde o atributo começa — senão aceitar a sugestão
+ * escreve `::class`. Daí o offset no retorno.
+ *
+ * Fica de fora tudo que só *parece* posição de atributo: o nome da tag em
+ * `<di`, o miolo de um valor entre aspas (ali quem completa é o JavaScript) e
+ * o `{% if %}` que aparece no meio da tag, onde os dois-pontos de
+ * `where:'x'` não são `v-bind`.
+ */
+export function attributeSlotAt(text: string, offset: number): AttributeSlot | undefined {
+  const before = text.slice(0, offset);
+  const open = before.lastIndexOf('<');
+  if (open === -1) {
+    return undefined;
+  }
+  const inside = before.slice(open);
+
+  // O `>` que fecha a tag é o que está fora de aspas: em `v-if="qtd > 0"` ele é
+  // o operador, e procurar o último `>` do texto daria a tag por fechada bem no
+  // meio dela. Aspas ainda abertas no fim significam cursor dentro do valor.
+  let quote: string | undefined;
+  for (const character of inside) {
+    if (quote) {
+      if (character === quote) {
+        quote = undefined;
+      }
+    } else if (character === '"' || character === "'") {
+      quote = character;
+    } else if (character === '>') {
+      return undefined;
+    }
+  }
+  if (quote) {
+    return undefined;
+  }
+
+  // `<div {% if x %}class="a"{% endif %}>`: dentro do Liquid nada aqui vale.
+  const lastOpen = Math.max(inside.lastIndexOf('{%'), inside.lastIndexOf('{{'));
+  const lastClose = Math.max(inside.lastIndexOf('%}'), inside.lastIndexOf('}}'));
+  if (lastOpen > lastClose) {
+    return undefined;
+  }
+
+  const word = ATTRIBUTE_WORD_RE.exec(inside)?.[0] ?? '';
+  const head = inside.slice(0, inside.length - word.length);
+  // O nome da tag já veio inteiro e há espaço depois dele: só aí cabe atributo.
+  if (!/^<[A-Za-z][\w:.-]*\s/.test(head) || !/\s$/.test(head)) {
+    return undefined;
+  }
+  return { word, start: offset - word.length };
+}
 const BLOCK_SET: ReadonlySet<string> = new Set<string>(BLOCK_TAGS);
 const END_SET: ReadonlySet<string> = new Set<string>(END_TAGS);
 const MIDDLE_SET: ReadonlySet<string> = new Set<string>(MIDDLE_TAGS);

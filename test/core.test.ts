@@ -5,7 +5,25 @@ import * as path from 'node:path';
 import { toggleBlockComment, type TextEditOp } from '../src/core/comment.ts';
 import { findPathReferences } from '../src/core/references.ts';
 import { analyze } from '../src/core/diagnostics.ts';
-import { BLOCK_TAGS, VUE_DIRECTIVES, directiveName } from '../src/core/liquidTags.ts';
+import {
+  BLOCK_TAGS,
+  VUE_DIRECTIVES,
+  VUE_BOUND_ATTRIBUTES,
+  VUE_EVENTS,
+  DIRECTIVE_SNIPPETS,
+  directiveName,
+  attributeSlotAt,
+  VOID_ELEMENTS,
+} from '../src/core/liquidTags.ts';
+import {
+  HTML_ELEMENTS,
+  attributesFor,
+  valuesFor,
+  tagNameSlotAt,
+  attributeValueSlotAt,
+  enclosingElement,
+  closingTagFor,
+} from '../src/core/htmlData.ts';
 import {
   resolveIncludePath,
   resolveDeployPath,
@@ -555,6 +573,236 @@ describe('diretivas do Vue', () => {
       assert.ok(entry.signature.includes(name), `${name}: a assinatura cita a diretiva`);
       assert.ok(entry.doc.length > 20, `${name}: sem documentação`);
       assert.ok(entry.example.includes('<'), `${name}: o exemplo é um trecho de HTML`);
+    }
+  });
+});
+
+/** O `|` marca o cursor e sai do texto antes da chamada. */
+function slotAt(marked: string): string | undefined {
+  const offset = marked.indexOf('|');
+  assert.notEqual(offset, -1, 'o caso precisa marcar o cursor com `|`');
+  return attributeSlotAt(marked.replace('|', ''), offset)?.word;
+}
+
+describe('posição de atributo para o completion de diretiva', () => {
+  test('o sinal entra no trecho que a sugestão substitui', () => {
+    // O caso do relato: com o range começando no `:`, aceitar a sugestão
+    // escreve `:class`; sem ele o `wordPattern` deixaria o sinal para trás e
+    // sobraria `::class`.
+    const slot = attributeSlotAt('<h1 :c></h1>', 6);
+    assert.deepEqual(slot, { word: ':c', start: 4 });
+  });
+
+  test('o atalho e a forma longa contam como uma palavra só', () => {
+    assert.equal(slotAt('<h1 :c|></h1>'), ':c');
+    assert.equal(slotAt('<button @cli|></button>'), '@cli');
+    assert.equal(slotAt('<div v-i|>'), 'v-i');
+    assert.equal(slotAt('<a @click.prev|></a>'), '@click.prev', 'com modificador');
+  });
+
+  test('atributo ainda vazio é posição válida', () => {
+    // É o Ctrl+Space logo depois do espaço, que deve abrir o menu inteiro.
+    assert.equal(slotAt('<div |></div>'), '');
+    assert.equal(slotAt('<input class="x" |>'), '');
+  });
+
+  test('a tag continua aberta depois de um `>` dentro de aspas', () => {
+    // `v-if="qtd > 0"` é comum, e ali o `>` é operador, não fim da tag.
+    assert.equal(slotAt('<div v-if="qtd > 0" :c|>'), ':c');
+  });
+
+  test('a tag pode estar quebrada em várias linhas', () => {
+    assert.equal(slotAt('<input\n\ttype="text"\n\tv-mo|>'), 'v-mo');
+  });
+
+  test('fora de uma posição de atributo não há sugestão', () => {
+    assert.equal(slotAt('<di|v>'), undefined, 'ainda é o nome da tag');
+    assert.equal(slotAt('<div class="a|">'), undefined, 'dentro do valor quem completa é o JS');
+    assert.equal(slotAt('<div :class="\'|\'">'), undefined, 'dentro do valor, com aspas simples');
+    assert.equal(slotAt('<div class=|>'), undefined, 'depois do `=` vem valor, não nome');
+    assert.equal(slotAt('<div> |</div>'), undefined, 'a tag já fechou');
+    assert.equal(slotAt('texto solto |'), undefined, 'não há tag nenhuma');
+    assert.equal(slotAt('</div |>'), undefined, 'tag de fechamento não leva atributo');
+  });
+
+  test('dentro do Liquid no meio da tag nada é diretiva', () => {
+    // Os dois-pontos de `where:'x'` são argumento do include, não v-bind.
+    assert.equal(slotAt("<div {% include /x where:'a'| %}>"), undefined);
+    assert.equal(slotAt('<div {% if x |%}>'), undefined);
+    assert.equal(
+      slotAt('<div {% if x %} :c|>'),
+      ':c',
+      'depois do {% %} fechado a tag volta a aceitar atributo',
+    );
+  });
+});
+
+describe('tabelas do completion de diretiva', () => {
+  test('todo snippet começa pela diretiva que ele escreve', () => {
+    for (const [name, snippet] of Object.entries(DIRECTIVE_SNIPPETS)) {
+      assert.ok(name in VUE_DIRECTIVES, `${name}: snippet sem entrada em VUE_DIRECTIVES`);
+      assert.ok(snippet.startsWith(name), `${name}: o snippet não começa pelo nome`);
+    }
+  });
+
+  test('todo atributo e evento tem descrição', () => {
+    for (const [name, doc] of Object.entries({ ...VUE_BOUND_ATTRIBUTES, ...VUE_EVENTS })) {
+      assert.ok(doc.length > 10, `${name}: sem descrição`);
+    }
+  });
+
+  test('o atalho de cada tabela resolve para a diretiva certa', () => {
+    for (const name of Object.keys(VUE_BOUND_ATTRIBUTES)) {
+      assert.equal(directiveName(`:${name}`), 'v-bind', `:${name}`);
+    }
+    for (const name of Object.keys(VUE_EVENTS)) {
+      assert.equal(directiveName(`@${name}`), 'v-on', `@${name}`);
+    }
+  });
+});
+
+/** O `|` marca o cursor, sai do texto e vira o offset passado à função. */
+function at<T>(marked: string, fn: (text: string, offset: number) => T): T {
+  const offset = marked.indexOf('|');
+  assert.notEqual(offset, -1, 'o caso precisa marcar o cursor com `|`');
+  return fn(marked.replace('|', ''), offset);
+}
+
+describe('posição de nome de tag', () => {
+  test('depois do `<`, com ou sem nome começado', () => {
+    assert.deepEqual(at('<|', tagNameSlotAt), { word: '', start: 0, closing: false });
+    assert.deepEqual(at('<p>oi</p>\n<di|', tagNameSlotAt), { word: 'di', start: 10, closing: false });
+    assert.deepEqual(at('<div></di|', tagNameSlotAt), { word: 'di', start: 5, closing: true });
+  });
+
+  test('o `<` que não abre tag não conta', () => {
+    assert.equal(at('{% if qtd <| 10 %}', tagNameSlotAt), undefined, 'operador do Liquid');
+    assert.equal(at('<a href="a<|b">', tagNameSlotAt), undefined, 'dentro do valor do atributo');
+    assert.equal(at('<div <|', tagNameSlotAt), undefined, 'a tag de fora ainda não fechou');
+    assert.equal(at('<div v-if="a <| b">', tagNameSlotAt), undefined, 'comparação na expressão do Vue');
+    assert.deepEqual(
+      at('{% if x %}<|', tagNameSlotAt),
+      { word: '', start: 10, closing: false },
+      'com o {% %} fechado, o `<` volta a abrir tag',
+    );
+  });
+
+  test('o texto entre tags abre tag', () => {
+    assert.deepEqual(at('<div>texto <|', tagNameSlotAt), { word: '', start: 11, closing: false });
+  });
+});
+
+describe('posição de valor de atributo', () => {
+  test('devolve a tag, o atributo e o que já foi digitado', () => {
+    assert.deepEqual(at('<input type="te|">', attributeValueSlotAt), {
+      tag: 'input',
+      attribute: 'type',
+      word: 'te',
+      start: 13,
+    });
+    assert.deepEqual(at("<a target='|'>", attributeValueSlotAt), {
+      tag: 'a',
+      attribute: 'target',
+      word: '',
+      start: 11,
+    });
+  });
+
+  test('o que não é valor de atributo simples fica de fora', () => {
+    assert.equal(at('<input type=|>', attributeValueSlotAt), undefined, 'ainda não abriu aspas');
+    assert.equal(at('<input |>', attributeValueSlotAt), undefined, 'posição de nome de atributo');
+    assert.equal(at('<input :type="te|">', attributeValueSlotAt), undefined, 'o valor de :type é JS');
+    assert.equal(at('<input v-model="a|">', attributeValueSlotAt), undefined, 'idem na diretiva');
+    assert.equal(
+      at('<img src="{{ Widget.Ur|" >', attributeValueSlotAt),
+      undefined,
+      'dentro do {{ }} quem completa é o Liquid',
+    );
+    assert.equal(at('<input type="text"|>', attributeValueSlotAt), undefined, 'o valor já fechou');
+  });
+});
+
+describe('elemento aberto no offset', () => {
+  const text = '<div class="a">\n\t<ul>\n\t\t<li>x</li>\n\t\t\n\t</ul>\n</div>';
+
+  test('é o mais interno ainda aberto', () => {
+    assert.equal(at(text.replace('\t\t\n', '\t\t|\n'), enclosingElement), 'ul');
+    assert.equal(at('<div><span>|', enclosingElement), 'span');
+    assert.equal(at('<div><span></span>|', enclosingElement), 'div');
+  });
+
+  test('void e self-closing não entram na pilha', () => {
+    assert.equal(at('<div><br><img src="x">|', enclosingElement), 'div');
+    assert.equal(at('<div><input />|', enclosingElement), 'div');
+  });
+
+  test('fechamento sem par é descartado em vez de estourar a pilha', () => {
+    // No meio da edição o arquivo passa boa parte do tempo desemparelhado.
+    assert.equal(at('</section><div>|', enclosingElement), 'div');
+    assert.equal(at('<div></span>|', enclosingElement), 'div');
+    assert.equal(at('texto|', enclosingElement), undefined);
+  });
+});
+
+describe('fechamento automático de tag', () => {
+  test('fecha o elemento que o `>` acabou de abrir', () => {
+    assert.equal(at('<div>|', closingTagFor), '</div>');
+    assert.equal(at('<a href="/x" class="b">|', closingTagFor), '</a>');
+  });
+
+  test('não fecha o que não pede fechamento', () => {
+    assert.equal(at('<br>|', closingTagFor), undefined, 'void');
+    assert.equal(at('<input />|', closingTagFor), undefined, 'self-closing');
+    assert.equal(at('</div>|', closingTagFor), undefined, 'já é o fechamento');
+    assert.equal(at('{% if a > b %}|', closingTagFor), undefined, 'o `>` é operador do Liquid');
+    assert.equal(
+      at('<div v-if="qtd >| 0"></div>', closingTagFor),
+      undefined,
+      'o `>` é operador dentro do valor',
+    );
+    assert.equal(
+      at('<div>|</div>', closingTagFor),
+      undefined,
+      'já existe fechamento logo adiante — reeditar atributos não pode duplicar',
+    );
+  });
+});
+
+describe('tabela do HTML', () => {
+  test('todo elemento tem descrição', () => {
+    for (const [name, element] of Object.entries(HTML_ELEMENTS)) {
+      assert.ok(element.doc.length > 3, `${name}: sem descrição`);
+    }
+  });
+
+  test('os atributos do elemento vêm antes dos globais, sem repetir', () => {
+    const attributes = attributesFor('img');
+    assert.equal(attributes[0], 'src');
+    assert.ok(attributes.includes('class'), 'os globais entram junto');
+    assert.equal(
+      new Set(attributes).size,
+      attributes.length,
+      'nada pode aparecer duas vezes no menu',
+    );
+    // `title` é global e também está na lista de vários elementos.
+    assert.equal(attributesFor('div').filter((name) => name === 'title').length, 1);
+  });
+
+  test('o valor depende do elemento, não só do nome do atributo', () => {
+    assert.ok(valuesFor('input', 'type').includes('checkbox'));
+    assert.deepEqual(valuesFor('button', 'type'), ['submit', 'reset', 'button']);
+    assert.ok(valuesFor('script', 'type').includes('text/x-template'));
+    assert.deepEqual(valuesFor('div', 'class'), [], 'atributo de valor livre');
+  });
+
+  test('todo elemento void da tabela é conhecido pelo indentador', () => {
+    // Quem decide se a tag abre nível é VOID_ELEMENTS; o completion e o
+    // fechamento automático leem a mesma lista, então divergir aqui daria
+    // `<img>` fechado com `</img>` e indentação errada de quebra.
+    for (const name of VOID_ELEMENTS) {
+      if (name !== '!doctype') {
+        assert.ok(name in HTML_ELEMENTS, `${name}: void sem entrada em HTML_ELEMENTS`);
+      }
     }
   });
 });

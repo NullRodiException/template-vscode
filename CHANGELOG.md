@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.0
+
+- **Autocomplete de HTML** — digitar `<` passa a oferecer os elementos, e o item escreve a tag inteira: escolher `div` deixa `<div></div>` com o cursor no meio. Depois de `</` vem o fechamento do elemento aberto mais interno. Dentro da tag entram os atributos do próprio elemento (`src`, `alt` e `loading` num `<img>`) seguidos dos globais (`class`, `id`, `role`, `aria-*`, `data-`), e os atributos de lista fechada abrem o menu dos valores já dentro das aspas — `type` de `<input>`, `rel` de `<link>`, `target`, `method`, `loading`. Antes o menu só conhecia `{% %}`, `{{ }}`, filtros, includes e as diretivas do Vue: em `<h1` não vinha nada, porque o serviço de HTML do VS Code só liga nas linguagens dele e `linx-liquid` não é uma delas. Vale dos dois lados do `{% raw %}`, e fica de fora do corpo de `<script>` e `<style>` — ali `a < b` é comparação — exceto no script que carrega template do Vue (`type="text/x-template"`), cujo corpo é marcação.
+- **Emmet** — `linx-liquid` entra em `emmet.includeLanguages` pelo manifesto, então `h1` + Tab expande para `<h1></h1>` e `ul>li*3` vira a lista inteira, como num `.html`. Quem já tem um `emmet.includeLanguages` próprio nas configurações do usuário não enxerga esse padrão — o valor do usuário substitui o default inteiro em vez de somar —, e para esse caso **Linx: Configurar workspace** passou a gravar o mapa mesclado no `.vscode/settings.json`.
+- **Fechamento automático de tag** — digitar `>` em `<div` escreve `</div>` logo adiante, com o cursor entre as duas. Desliga em `linxLiquid.autoClosingTags`. O `>` que é operador não conta, seja no valor de uma diretiva (`v-if="qtd > 0"`) ou no Liquid (`{% if a > b %}`); void (`<br>`, `<img>`) e self-closing não fecham nada; e uma tag que já tem o fechamento logo à frente não ganha um segundo.
+
+## 0.4.0
+
+- **Autocomplete das diretivas do Vue** — `Ctrl+Space` dentro de uma tag passa a oferecer `v-if`, `v-for`, `v-model` e as demais, mais os atalhos `:class`, `:key`, `@click`, `@submit` e companhia, cada um com a descrição e o exemplo que o hover já mostrava. Antes o menu só conhecia `{% %}`, `{{ }}`, filtros e caminhos de include: em `<h1 :c>` não vinha nada. Cada item substitui o atributo inteiro, sinal incluído — o `wordPattern` da linguagem corta o `:`, e sem isso aceitar `:class` depois de `:c` escreveria `::class`. Vale dentro e fora de `{% raw %}`, como a injeção do realce. `:`, `@`, `#` e `-` viraram gatilhos, então o menu abre sozinho ao digitar.
+
 ## 0.3.0
 
 - **Diretivas do Vue** — `v-if`, `v-for`, `v-model`, `:class`, `@click.stop`, `#footer` e as demais passam a ter escopo próprio, com o valor tratado como JavaScript. Antes caíam no atributo genérico do HTML (`meta.attribute.unrecognized.v-if.html`) e a expressão inteira era uma string sem realce nenhum — nos arquivos deste corpus são 268 `v-if`, 218 `@click` e 136 `v-model`. É uma injeção, então vale dentro e fora de `{% raw %}`; o `{{ }}` do Liquid dentro do valor continua sendo Liquid, e um `@click` escrito dentro de uma string comum continua sendo texto.
