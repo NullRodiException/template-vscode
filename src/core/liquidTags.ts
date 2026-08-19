@@ -244,6 +244,117 @@ export const GLOBAL_OBJECTS: Record<string, string> = {
   forloop: 'Estado do `{% for %}` atual: `forloop.last`, `.first`, `.index`.',
 };
 
+/**
+ * Diretivas do Vue 2, o framework que roda no navegador depois que o servidor
+ * entrega o HTML. Aparecem dentro e fora de `{% raw %}`: elas são atributo, não
+ * `{{ }}`, então não colidem com a sintaxe do Liquid.
+ */
+export const VUE_DIRECTIVES: Record<string, { signature: string; doc: string; example: string }> = {
+  'v-if': {
+    signature: 'v-if="<expressão>"',
+    doc: 'Renderiza o elemento só quando a expressão é verdadeira. O elemento **não existe** no DOM quando falsa — ao contrário de `v-show`.',
+    example: '<div v-if="Basket.Items.length > 0">',
+  },
+  'v-else-if': {
+    signature: 'v-else-if="<expressão>"',
+    doc: 'Encadeia depois de um `v-if`. Precisa ser o elemento imediatamente seguinte.',
+    example: '<p v-else-if="carregando">Carregando…</p>',
+  },
+  'v-else': {
+    signature: 'v-else',
+    doc: 'Alternativa do `v-if` anterior. Não leva valor, e precisa ser o elemento imediatamente seguinte.',
+    example: '<p v-else>Carrinho vazio</p>',
+  },
+  'v-show': {
+    signature: 'v-show="<expressão>"',
+    doc: 'Alterna `display: none`. O elemento continua no DOM — use quando alterna muito, e `v-if` quando raramente.',
+    example: '<div v-show="aberto">',
+  },
+  'v-for': {
+    signature: 'v-for="<item> in <lista>"',
+    doc: 'Repete o elemento para cada item. Com índice: `(item, i) in lista`. Peça sempre um `:key` junto.',
+    example: '<li v-for="(item, i) in Basket.Items" :key="item.Id">',
+  },
+  'v-model': {
+    signature: 'v-model="<propriedade>"',
+    doc: 'Liga o valor do campo à propriedade nos dois sentidos.',
+    example: '<input v-model="Customer.Email">',
+  },
+  'v-bind': {
+    signature: 'v-bind:<atributo>="<expressão>" — atalho `:<atributo>`',
+    doc: 'Liga o atributo ao resultado da expressão. Sem ele o valor seria literal.',
+    example: '<img :src="item.ImageUrl" :alt="item.Name">',
+  },
+  'v-on': {
+    signature: 'v-on:<evento>="<expressão>" — atalho `@<evento>`',
+    doc: 'Escuta o evento. Modificadores comuns: `.prevent`, `.stop`, `.once`, `.enter`.',
+    example: '<button @click.prevent="adicionar(item)">',
+  },
+  'v-html': {
+    signature: 'v-html="<expressão>"',
+    doc: 'Injeta HTML cru. Não use com conteúdo vindo do usuário — é vetor de XSS.',
+    example: '<div v-html="produto.Descricao">',
+  },
+  'v-text': {
+    signature: 'v-text="<expressão>"',
+    doc: 'Preenche o texto do elemento. Equivale a `{{ }}` no corpo, e evita o flash do conteúdo antes do Vue montar.',
+    example: '<span v-text="total">',
+  },
+  'v-slot': {
+    signature: 'v-slot:<nome> — atalho `#<nome>`',
+    doc: 'Nomeia o conteúdo passado para o slot de um componente.',
+    example: '<template #footer>',
+  },
+  'v-cloak': {
+    signature: 'v-cloak',
+    doc: 'Fica no elemento até o Vue montar. Combinado com `[v-cloak] { display: none }` no CSS, esconde os `{{ }}` crus enquanto a página carrega.',
+    example: '<div id="app" v-cloak>',
+  },
+  'v-once': {
+    signature: 'v-once',
+    doc: 'Renderiza uma vez e congela: as atualizações seguintes ignoram esta subárvore.',
+    example: '<span v-once>{{ Config.General.Store.Name }}</span>',
+  },
+  'v-pre': {
+    signature: 'v-pre',
+    doc: 'Deixa o conteúdo intacto: o Vue não compila nada aqui dentro, nem os `{{ }}`.',
+    example: '<code v-pre>{{ isto aparece literal }}</code>',
+  },
+  'v-mask': {
+    signature: 'v-mask="\'<máscara>\'"',
+    doc: 'Máscara de digitação. **Não é do Vue**: vem da biblioteca `vue-the-mask`, carregada junto do checkout.',
+    example: '<input v-mask="\'###.###.###-##\'">',
+  },
+};
+
+/** Atalhos: o sinal no começo do atributo e a diretiva que ele abrevia. */
+const DIRECTIVE_SHORTHANDS: Record<string, string> = {
+  ':': 'v-bind',
+  '@': 'v-on',
+  '#': 'v-slot',
+};
+
+/**
+ * Nome canônico da diretiva escrita num atributo, ou `undefined` se o atributo
+ * não for diretiva.
+ *
+ * Normaliza as três formas em que a mesma coisa aparece: o atalho (`:class`), a
+ * forma longa com argumento (`v-bind:class`) e a com modificadores
+ * (`@click.stop.prevent`).
+ */
+export function directiveName(attribute: string): string | undefined {
+  const shorthand = DIRECTIVE_SHORTHANDS[attribute[0]];
+  if (shorthand) {
+    return attribute.length > 1 ? shorthand : undefined;
+  }
+  if (!attribute.startsWith('v-')) {
+    return undefined;
+  }
+  // `v-on:change.prevent` ⇒ `v-on`; `v-else-if` continua inteiro.
+  const name = attribute.split(/[:.]/)[0];
+  return name in VUE_DIRECTIVES ? name : undefined;
+}
+
 const BLOCK_SET: ReadonlySet<string> = new Set<string>(BLOCK_TAGS);
 const END_SET: ReadonlySet<string> = new Set<string>(END_TAGS);
 const MIDDLE_SET: ReadonlySet<string> = new Set<string>(MIDDLE_TAGS);

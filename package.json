@@ -2,7 +2,7 @@
   "name": "linx-liquid-template",
   "displayName": "Linx Liquid Template",
   "description": "Suporte a arquivos .template do Liquid da Linx Commerce: highlight, indentação, comentar bloco, navegação e diagnósticos.",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -67,6 +67,13 @@
         "injectTo": [
           "text.html.linx-liquid"
         ]
+      },
+      {
+        "scopeName": "linx-liquid.injection.vue-directive",
+        "path": "./syntaxes/vue-directive.injection.json",
+        "injectTo": [
+          "text.html.linx-liquid"
+        ]
       }
     ],
     "snippets": [
@@ -121,7 +128,7 @@
         "linxLiquid.themeRoot": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Caminho da raiz do tema (a pasta que contém `Pages/`), usado para resolver `{% include /Pages/... %}`. Relativo à pasta do workspace ou absoluto. Vazio = detectar automaticamente subindo os diretórios até achar uma pasta `Pages/`."
+          "markdownDescription": "Caminho da raiz do tema, usado para resolver `{% include /Pages/... %}`. Relativo à pasta do workspace ou absoluto. Vazio = detectar automaticamente subindo os diretórios até achar uma pasta que contenha `Pages/` ou a pasta `html/` do site."
         },
         "linxLiquid.sharedThemeRoot": {
           "type": "string",

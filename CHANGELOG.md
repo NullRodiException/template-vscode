@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- **Diretivas do Vue** — `v-if`, `v-for`, `v-model`, `:class`, `@click.stop`, `#footer` e as demais passam a ter escopo próprio, com o valor tratado como JavaScript. Antes caíam no atributo genérico do HTML (`meta.attribute.unrecognized.v-if.html`) e a expressão inteira era uma string sem realce nenhum — nos arquivos deste corpus são 268 `v-if`, 218 `@click` e 136 `v-model`. É uma injeção, então vale dentro e fora de `{% raw %}`; o `{{ }}` do Liquid dentro do valor continua sendo Liquid, e um `@click` escrito dentro de uma string comum continua sendo texto.
+- **Hover das diretivas** — o que cada uma faz, com exemplo. Nos atalhos, `:x` documenta o `v-bind` e `@x` o `v-on`.
+
+- **Repositório de sites** — a raiz do tema passa a ser reconhecida também como a pasta `<site>/html/`, e não só como a pasta que contém `Pages/`. Sites que só levam `Components/` não tinham raiz nenhuma: `{% include /Components/ProductMedias/index %}` só resolvia quando o arquivo estava na própria `html/`, e `| themepath` não resolvia nunca. A detecção funciona também a partir de arquivos fora da pasta (`src/scss/…`).
+- **`Ctrl+Alt+T` com vários sites abertos** — os templates do tema do arquivo aberto vêm primeiro, com o caminho contado a partir da raiz dele (`Components/ProductMedias`), e o título mostra de que site são; o resto do workspace segue depois, com o caminho completo. Num workspace com dezenas de `<site>/html/` a lista era uma mistura de homônimos (`index`, `basket`) sob caminhos longos. `bower_components` entrou na lista de exclusão junto de `node_modules`.
+
 ## 0.2.0
 
 ### Recursos de linguagem

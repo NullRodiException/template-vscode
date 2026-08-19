@@ -13,7 +13,7 @@ import * as vscode from 'vscode';
 
 /** Teto de arquivos varridos, para não travar num monorepo gigante. */
 const MAX_FILES = 500;
-const EXCLUDE = '**/node_modules/**';
+const EXCLUDE = '{**/node_modules/**,**/bower_components/**}';
 
 const WIDGET_PROPERTY_RE = /\{\{-?\s*Widget\.(\w+)/g;
 

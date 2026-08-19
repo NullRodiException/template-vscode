@@ -1,0 +1,5 @@
+{% assign MediaGroups = Product.MediaGroups | groupby: "VariationPath" %}
+
+<div id="product-medias" class="product-medias">
+  {% include /Components/Arrows/index %}
+</div>

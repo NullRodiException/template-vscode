@@ -1,7 +1,14 @@
 import * as vscode from 'vscode';
 
 import { regionAt } from './core/scanner.ts';
-import { LINX_TAGS, LINX_FILTERS, VUE_FILTERS, GLOBAL_OBJECTS } from './core/liquidTags.ts';
+import {
+  LINX_TAGS,
+  LINX_FILTERS,
+  VUE_FILTERS,
+  VUE_DIRECTIVES,
+  GLOBAL_OBJECTS,
+  directiveName,
+} from './core/liquidTags.ts';
 import { regionsOf } from './regionCache.ts';
 import { LANGUAGE_ID } from './format/provider.ts';
 
@@ -11,18 +18,52 @@ interface Entry {
   example: string;
 }
 
-function render(title: string, entry: Entry): vscode.Hover {
+function render(title: string, entry: Entry, language = 'liquid'): vscode.Hover {
   const md = new vscode.MarkdownString();
-  md.appendCodeblock(entry.signature, 'liquid');
+  md.appendCodeblock(entry.signature, language);
   md.appendMarkdown(`\n${entry.doc}\n\n**Exemplo**\n`);
-  md.appendCodeblock(entry.example, 'liquid');
+  md.appendCodeblock(entry.example, language);
   md.appendMarkdown(`\n*${title}*`);
   md.supportHtml = false;
   return new vscode.Hover(md);
 }
 
+/** Nome de atributo, incluindo o hífen e o sinal que a "palavra" do editor corta. */
+const ATTRIBUTE_RE = /[:@#]?[A-Za-z][\w.-]*/;
+
+/**
+ * `true` se o offset está dentro de uma tag HTML aberta — entre `<tag` e o `>`.
+ *
+ * É o que separa a diretiva de um homônimo: `@media` dentro de um `<style>` e
+ * `:label` dentro de um `<script>` casam com a mesma forma de atalho, mas ali o
+ * `<` mais próximo já foi fechado.
+ */
+function insideOpenTag(text: string, offset: number): boolean {
+  const open = text.lastIndexOf('<', offset);
+  return open !== -1 && open > text.lastIndexOf('>', offset) && /^<[A-Za-z]/.test(text.slice(open, open + 2));
+}
+
+/** Hover das diretivas do Vue: `v-if`, `:class`, `@click.stop`, `#footer`. */
+function directiveHover(document: vscode.TextDocument, position: vscode.Position): vscode.Hover | undefined {
+  const range = document.getWordRangeAtPosition(position, ATTRIBUTE_RE);
+  if (!range) {
+    return undefined;
+  }
+  const attribute = document.getText(range);
+  const name = directiveName(attribute);
+  if (!name || !insideOpenTag(document.getText(), document.offsetAt(range.start))) {
+    return undefined;
+  }
+  return render('diretiva do Vue — roda no navegador', VUE_DIRECTIVES[name], 'html');
+}
+
 const hoverProvider: vscode.HoverProvider = {
   provideHover(document, position) {
+    const directive = directiveHover(document, position);
+    if (directive) {
+      return directive;
+    }
+
     const range = document.getWordRangeAtPosition(position, /[A-Za-z_]\w*/);
     if (!range) {
       return undefined;
