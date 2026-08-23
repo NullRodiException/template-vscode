@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.7.0
+
+- **Ícone dos `.template`** — o quadrado arredondado com o T passa a marcar os arquivos no explorer, nas abas e no Quick Open. Antes vinha o ícone genérico de arquivo: nenhum tema de ícones conhece a extensão `.template`, e numa pasta de tema onde `.js`, `.scss` e `.html` são todos reconhecidos, os `.template` eram os únicos itens sem marca — a lista se lia só pelo nome. É a contribuição `icon` da linguagem, com o mesmo traço em duas cores: `#1e66f5` no tema claro, `#89b4fa` no escuro. Quem decide se ele aparece é o tema de ícones ativo — o VS Code só gera a regra da linguagem para temas que declaram alguma associação própria (`fileExtensions`, `fileNames` ou `languageIds`) e não desligam `showLanguageModeIcons`. O Seti, padrão do editor, entra nesse caso, e ali a regra vence o ícone genérico por especificidade; temas de ícone único, como o **Minimal**, não geram regra nenhuma e seguem mostrando o documento em branco.
+
 ## 0.6.0
 
 - **Dobra dos elementos HTML** — `<div>`, `<p>`, `<template>` e companhia passam a dobrar, escondendo até a linha antes do fechamento, que continua visível. Antes só dobravam os blocos Liquid, o `<script>`, o `<style>` e os comentários: num arquivo de 240 linhas de marcação, a única forma de esconder uma seção era a dobra por indentação — que nestes arquivos não bate com a estrutura. Void (`<br>`, `<img>`) e self-closing não abrem faixa, e vale dos dois lados do `{% raw %}`, inclusive dentro de `<script type="text/x-template">`, onde o corpo é marcação. O emparelhamento é tolerante como o do indentador: fechamento órfão é ignorado, abertura sem par não dobra, e a busca não passa de três níveis — a árvore destes arquivos não é balanceada, e sem o teto um `</span>` solto engoliria o arquivo numa faixa só.

@@ -106,6 +106,12 @@ Digitar `>` fecha a tag sozinho (`<div` vira `<div></div>` com o cursor no meio)
 
 Snippets: `lxcomponent` (esqueleto de componente novo), `forjson` (laço gerando array JSON dentro de `<script>`), e um para cada tag proprietária.
 
+### Ícone dos arquivos
+
+Os `.template` têm ícone próprio no explorer e nas abas, em duas cores — uma para tema claro, outra para escuro.
+
+Quem decide se ele aparece é o tema de ícones ativo: o VS Code só gera a regra da linguagem para temas que declaram associações próprias e não desligam `showLanguageModeIcons`. O **Seti**, padrão do editor, entra nesse caso. Temas de ícone único, como o **Minimal**, mostram o documento em branco de sempre.
+
 ## Configuração
 
 | Opção | Padrão | Para quê |
