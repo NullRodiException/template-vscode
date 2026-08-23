@@ -2,7 +2,7 @@
   "name": "linx-liquid-template",
   "displayName": "Linx Liquid Template",
   "description": "Suporte a arquivos .template do Liquid da Linx Commerce: highlight, indentação, comentar bloco, navegação e diagnósticos.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -99,11 +99,32 @@
         "category": "Linx"
       },
       {
+        "command": "linxLiquid.copyInclude",
+        "title": "Copiar {% include %} do arquivo",
+        "category": "Linx"
+      },
+      {
         "command": "linxLiquid.setupWorkspace",
         "title": "Configurar workspace (formatar ao salvar)",
         "category": "Linx"
       }
     ],
+    "menus": {
+      "explorer/context": [
+        {
+          "command": "linxLiquid.copyInclude",
+          "when": "resourceExtname == .template",
+          "group": "6_copypath@10"
+        }
+      ],
+      "editor/title/context": [
+        {
+          "command": "linxLiquid.copyInclude",
+          "when": "resourceExtname == .template",
+          "group": "6_copypath@10"
+        }
+      ]
+    },
     "keybindings": [
       {
         "command": "linxLiquid.openTemplate",

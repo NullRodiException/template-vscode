@@ -113,6 +113,164 @@ describe('folding — script e style', () => {
   });
 });
 
+describe('folding — elementos HTML', () => {
+  test('<div> dobra até a linha antes do </div>', () => {
+    const text = ['<div class="algo">', '  <p>oi</p>', '</div>'].join('\n');
+    assert.deepEqual(pairs(text), [[0, 1]], 'o </div> continua visível, como no HTML');
+  });
+
+  test('elementos aninhados geram uma faixa cada', () => {
+    const text = [
+      '<div class="algo">',
+      '  <div class="algo2">',
+      '    <p>',
+      '      oi',
+      '    </p>',
+      '  </div>',
+      '</div>',
+    ].join('\n');
+
+    assert.deepEqual(pairs(text), [
+      [0, 5],
+      [1, 4],
+      [2, 3],
+    ]);
+  });
+
+  test('elemento inteiro numa linha só não vira faixa', () => {
+    assert.deepEqual(pairs('<p><span>oi</span></p>'), []);
+  });
+
+  test('void e self-closing não abrem faixa', () => {
+    const text = ['<div>', '  <br>', '  <img src="a.png">', '  <input />', '</div>'].join('\n');
+    assert.deepEqual(pairs(text), [[0, 3]], 'só o <div> dobra');
+  });
+
+  test('o fechamento casa com a abertura mais interna', () => {
+    // O caso do editor: a tag de dentro acabou de ser digitada e ainda não tem par.
+    const text = ['<div class="algo">', '  <div id="al">', '', '</div>'].join('\n');
+    assert.deepEqual(pairs(text), [[1, 2]], 'o </div> fecha o de dentro; o de fora fica sem par');
+  });
+
+  test('fechamento órfão não vira faixa nem derruba a faixa de fora', () => {
+    const text = ['<div>', '  </span>', '  oi', '</div>'].join('\n');
+    assert.deepEqual(pairs(text), [[0, 2]]);
+  });
+
+  test('o > dentro de valor de atributo não fecha a tag', () => {
+    const text = ['<div v-if="qtd > 0" :class="{% if a %}x{% endif %}">', '  oi', '</div>'].join('\n');
+    assert.deepEqual(pairs(text), [[0, 1]]);
+  });
+
+  test('tag com atributos em várias linhas dobra a partir da linha do <', () => {
+    const text = ['<input', '  type="text"', '  value="x">', '<div>', '  oi', '</div>'].join('\n');
+    assert.deepEqual(pairs(text), [[3, 4]], 'o <input> é void, mesmo espalhado em três linhas');
+  });
+
+  test('a marcação dentro de {% raw %} dobra', () => {
+    const text = [
+      '{% raw %}',
+      '<template id="tpl-x">',
+      '  <div v-for="i in itens">',
+      '    {{ i.Name }}',
+      '  </div>',
+      '</template>',
+      '{% endraw %}',
+    ].join('\n');
+
+    assert.deepEqual(pairs(text), [
+      [0, 5],
+      [1, 4],
+      [2, 3],
+    ]);
+  });
+
+  test('o que está dentro de comentário não emparelha com o de fora', () => {
+    const text = ['<!--', '<div>', '-->', '<p>', 'oi', '</p>'].join('\n');
+    assert.deepEqual(pairs(text), [
+      [0, 1],
+      [3, 4],
+    ]);
+  });
+
+  test('<div> em código JavaScript não emparelha', () => {
+    const text = [
+      '<script>',
+      "  var s = '<div>';",
+      '  if (a < b) { c(); }',
+      '</script>',
+      '<p>',
+      'oi',
+      '</p>',
+    ].join('\n');
+    assert.deepEqual(pairs(text), [
+      [0, 2],
+      [4, 5],
+    ]);
+  });
+
+  test('a marcação de um <script type="text/x-template"> dobra', () => {
+    // É como o tema entrega o template de um componente ao Vue: o corpo é HTML,
+    // ao contrário de todo outro <script>.
+    const text = [
+      '<script type="text/x-template" id="tpl-x">',
+      '  <div class="item">',
+      '    <span>{{ i.Name }}</span>',
+      '  </div>',
+      '</script>',
+    ].join('\n');
+
+    assert.deepEqual(pairs(text), [
+      [0, 3],
+      [1, 2],
+    ]);
+  });
+
+  test('<script> e <style> dobram uma vez só', () => {
+    const text = ['<script>', 'var x = 1;', '</script>', '<style>', '.a { color: red; }', '</style>'].join('\n');
+    assert.deepEqual(
+      pairs(text),
+      [
+        [0, 1],
+        [3, 4],
+      ],
+      'a faixa vem da região; emparelhar a tag geraria uma segunda seta na mesma linha',
+    );
+  });
+
+  test('elemento e bloco Liquid abertos na mesma linha rendem as duas faixas', () => {
+    const text = ['{% if a %}<div>', '  oi', '</div>{% endif %}'].join('\n');
+    assert.deepEqual(
+      pairs(text),
+      [
+        [0, 1],
+        [0, 2],
+      ],
+      'o VS Code fica com a primeira: duas setas na mesma linha ele não desenha',
+    );
+  });
+
+  test('nome de elemento é case-insensitive', () => {
+    const text = ['<DIV>', '  oi', '</div>'].join('\n');
+    assert.deepEqual(pairs(text), [[0, 1]]);
+  });
+
+  test('componente com hífen e ponto dobra', () => {
+    const text = ['<my-widget.item>', '  oi', '</my-widget.item>'].join('\n');
+    assert.deepEqual(pairs(text), [[0, 1]]);
+  });
+
+  test('aspa sem par dentro da tag não engole o resto do arquivo', () => {
+    // Sem o limite de uma linha para o valor de atributo, a aspa solta procuraria
+    // par até o fim do texto e levaria junto todas as dobras daqui para baixo.
+    const text = ["<div data-x='a>", '  oi', '</div>', '<p>', '  oi', '</p>'].join('\n');
+    assert.deepEqual(pairs(text), [
+      [0, 1],
+      [3, 4],
+    ]);
+  });
+});
+
 describe('folding — invariantes', () => {
   test('nenhuma faixa é vazia ou invertida', () => {
     const text = [

@@ -40,6 +40,8 @@ Além do formatador, `indentationRules` e `onEnterRules` dão indentação autom
 
 As faixas dobráveis saem da estrutura real, não da indentação — que nestes arquivos não é confiável. Dobram `{% if %}`, `{% for %}`, `{% capture %}` e os demais blocos, mais `{% raw %}`, `{% comment %}`, `<script>`, `<style>` e comentários HTML. Um bloco sem fechamento não dobra: sem o `end*` não há como saber onde a faixa terminaria, e é o diagnóstico que reporta o problema.
 
+Os **elementos HTML** também dobram: `<div>` esconde até a linha antes do `</div>`, que continua visível. Void (`<br>`, `<img>`) e self-closing não abrem faixa, e vale dos dois lados do `{% raw %}` — inclusive dentro de um `<script type="text/x-template">`, onde o corpo é marcação. A árvore destes arquivos não é balanceada (os ramos de um `{% if %}` abrem elementos diferentes, e há `</span>` órfão no corpus), então o emparelhamento é tolerante: um fechamento sem abertura à vista é ignorado e uma abertura sem par simplesmente não dobra, em vez de desalinhar o resto do arquivo.
+
 ### Comentar bloco — `Ctrl+/`
 
 Sempre insere `{% comment %}` / `{% endcomment %}`, que é a única sintaxe que realmente neutraliza código do servidor. `<!-- -->` **não desativa Liquid** — o Liquid roda antes do HTML.
@@ -61,6 +63,16 @@ A resolução cobre os dois esquemas de caminho que convivem no projeto: o de **
 A raiz de onde esses caminhos contam é descoberta subindo os diretórios: a pasta que contém `Pages/` no widget avulso, ou a `<site>/html/` no repositório de sites — inclusive nos sites que só têm `Components/`, e a partir de arquivos fora dela (`src/scss/…`, por exemplo).
 
 O Outline e os breadcrumbs listam os `<template id="tpl-…">`, os `<script>`/`<style>` e os `{% capture %}`/`{% assign %}` — o que se procura num arquivo de 240 linhas.
+
+### Copiar o `{% include %}` de um arquivo
+
+Botão direito num `.template` no explorer (ou na aba dele) → **Copiar `{% include %}` do arquivo**, e a área de transferência fica com a tag pronta:
+
+```
+<site>/html/components/index.template   ⇒   {% include /components/index %}
+```
+
+É o mesmo caminho que o Ctrl+Click resolve de volta: conta da raiz do tema, com barra inicial e sem a extensão, que é o servidor quem recoloca. Selecionando vários arquivos, sai uma linha por include. Pela paleta de comandos o alvo é o arquivo aberto.
 
 ### Diagnósticos
 
@@ -137,11 +149,13 @@ As garantias mais importantes:
 ### Organização
 
 ```
-src/core/       scanner de regiões, emparelhamento de blocos, tabela do dialeto,
-                tabela do HTML, resolução de caminhos, símbolos, dobra,
-                comentário e diagnósticos — tudo puro, sem importar 'vscode'
+src/core/       scanner de regiões, emparelhamento de blocos, varredura de tags
+                HTML, tabela do dialeto, tabela do HTML, resolução de caminhos,
+                símbolos, dobra, comentário e diagnósticos — tudo puro, sem
+                importar 'vscode'
 src/format/     indentador (puro) + providers de formatação e dobra
-src/navigation/ quick pick, links, definição, símbolos, toggle template↔js
+src/navigation/ quick pick, links, definição, símbolos, toggle template↔js,
+                copiar include
 syntaxes/       gramática principal + duas injeções
 ```
 

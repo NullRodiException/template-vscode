@@ -224,6 +224,29 @@ export function resolveIncludePath(
 }
 
 /**
+ * Caminho de include de um arquivo — a operação inversa de `resolveIncludePath`.
+ *
+ * `<raiz>/components/index.template` vira `/components/index`: a barra inicial
+ * conta da raiz do tema, e a extensão fica de fora porque é o servidor que a
+ * recoloca.
+ *
+ * `undefined` quando o arquivo não é `.template` — `{% include %}` não carrega
+ * outra coisa — ou quando está fora da raiz, onde não existe caminho que o
+ * servidor saiba resolver.
+ */
+export function toIncludePath(filePath: string, root: string): string | undefined {
+  if (path.extname(filePath).toLowerCase() !== '.template') {
+    return undefined;
+  }
+  const relative = path.relative(root, filePath);
+  if (relative === '' || relative.startsWith('..') || path.isAbsolute(relative)) {
+    return undefined;
+  }
+  const stem = relative.slice(0, -'.template'.length);
+  return `/${stem.split(path.sep).join('/')}`;
+}
+
+/**
  * Resolve um caminho de **fonte** (`| themepath`), que já vem com extensão e
  * pode carregar querystring de cache-busting.
  */

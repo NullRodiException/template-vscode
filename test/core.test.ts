@@ -31,6 +31,7 @@ import {
   findCounterpart,
   findThemeRoot,
   getThemeInfo,
+  toIncludePath,
 } from '../src/core/theme.ts';
 import {
   read,
@@ -266,6 +267,40 @@ describe('repositório de sites: a raiz do tema é a pasta html/', () => {
 
   test('a configuração themeRoot continua tendo a última palavra', () => {
     assert.equal(findThemeRoot(nested, fixture('site-project')), fixture('site-project'));
+  });
+});
+
+describe('caminho de include a partir do arquivo', () => {
+  const root = fixture('site-project/html');
+
+  test('conta da raiz do tema, com barra inicial e sem extensão', () => {
+    assert.equal(
+      toIncludePath(fixture('site-project/html/Components/ProductMedias/index.template'), root),
+      '/Components/ProductMedias/index',
+    );
+  });
+
+  test('arquivo na própria raiz', () => {
+    assert.equal(toIncludePath(fixture('site-project/html/product.line.template'), root), '/product.line');
+  });
+
+  test('só o .template do fim sai; o resto do nome fica', () => {
+    assert.equal(toIncludePath(path.join(root, 'a.template.template'), root), '/a.template');
+  });
+
+  test('o caminho copiado é o que o resolvedor abre de volta', () => {
+    const file = fixture('site-project/html/Components/Arrows/index.template');
+    const includePath = toIncludePath(file, root)!;
+    assert.equal(resolveIncludePath(includePath, fixture('site-project/html/product.line.template')), file);
+  });
+
+  test('fora da raiz não tem include', () => {
+    assert.equal(toIncludePath(fixture('site-project/src/scss/produto/_medias.scss'), root), undefined);
+    assert.equal(toIncludePath(fixture('plain-project/index.template'), root), undefined);
+  });
+
+  test('quem não é .template não tem include', () => {
+    assert.equal(toIncludePath(path.join(root, 'Scripts', 'main.js'), root), undefined);
   });
 });
 

@@ -18,14 +18,21 @@ export function isOnDisk(document: vscode.TextDocument): boolean {
   return document.uri.scheme === 'file';
 }
 
-function setting(document: vscode.TextDocument, key: string): string | undefined {
-  const value = vscode.workspace.getConfiguration('linxLiquid', document).get<string>(key, '');
+/**
+ * O escopo é um documento aberto ou apenas a `Uri` de um arquivo: um comando
+ * disparado pelo menu do explorer age sobre um arquivo que ninguém abriu, e a
+ * configuração pode ser por pasta num workspace multi-root.
+ */
+type Scope = vscode.TextDocument | vscode.Uri;
+
+function setting(scope: Scope, key: string): string | undefined {
+  const value = vscode.workspace.getConfiguration('linxLiquid', scope).get<string>(key, '');
   return value.trim() === '' ? undefined : value;
 }
 
 /** `linxLiquid.themeRoot`, ou `undefined` para detectar automaticamente. */
-export function themeRootFor(document: vscode.TextDocument): string | undefined {
-  return setting(document, 'themeRoot');
+export function themeRootFor(scope: Scope): string | undefined {
+  return setting(scope, 'themeRoot');
 }
 
 /** `linxLiquid.sharedThemeRoot`, ou `undefined` se não configurado. */

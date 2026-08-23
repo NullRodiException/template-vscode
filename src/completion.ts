@@ -33,6 +33,7 @@ import {
   type AttributeValueSlot,
 } from './core/htmlData.ts';
 import { regionAt, type Region } from './core/scanner.ts';
+import { isVueTemplateScript } from './core/htmlTags.ts';
 import { openBlocksAt } from './core/blocks.ts';
 import { regionsOf } from './regionCache.ts';
 import { LANGUAGE_ID } from './format/provider.ts';
@@ -350,10 +351,7 @@ function isMarkup(text: string, region: Region | undefined): boolean {
   if (!region || (region.kind !== 'script' && region.kind !== 'style')) {
     return true;
   }
-  return (
-    region.kind === 'script' &&
-    /<script\b[^>]*type\s*=\s*["'][^"']*template[^"']*["'][^>]*>$/i.test(text.slice(0, region.start))
-  );
+  return isVueTemplateScript(text, region);
 }
 
 const provider: vscode.CompletionItemProvider = {

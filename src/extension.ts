@@ -10,6 +10,7 @@ import { registerCompletion } from './completion.ts';
 import { registerAutoCloseTags } from './autoClose.ts';
 import { openTemplateQuickPick } from './navigation/quickOpen.ts';
 import { toggleTemplateScript } from './navigation/toggle.ts';
+import { copyInclude } from './navigation/copyInclude.ts';
 import { toggleBlockComment } from './core/comment.ts';
 import { clearThemeCache } from './core/theme.ts';
 import { regionsOf, clearRegionCache } from './regionCache.ts';
@@ -113,6 +114,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('linxLiquid.openTemplate', openTemplateQuickPick),
     vscode.commands.registerCommand('linxLiquid.toggleTemplateScript', toggleTemplateScript),
     vscode.commands.registerCommand('linxLiquid.toggleComment', toggleComment),
+    vscode.commands.registerCommand('linxLiquid.copyInclude', copyInclude),
     vscode.commands.registerCommand('linxLiquid.setupWorkspace', () =>
       setupWorkspace(context.extension.id),
     ),
