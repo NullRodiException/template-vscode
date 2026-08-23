@@ -270,6 +270,135 @@ describe('repositório de sites: a raiz do tema é a pasta html/', () => {
   });
 });
 
+describe('repositório de temas: raiz sem Pages/ e sem html/', () => {
+  // test/fixtures/theme-repo/ imita um clone de tema da Linx com vários temas
+  // irmãos na raiz — `Base/`, `Shared/` — e nenhum deles com `Pages/` ou
+  // `html/`. Nesse formato o sinal de raiz é `Templates/`/`Components/`/
+  // `Configs/`, e não há `manifest.xml` em lugar nenhum do clone.
+  const workspace = fixture('theme-repo');
+  const base = fixture('theme-repo/Base');
+  const master = fixture('theme-repo/Base/Templates/masters/1Column.template');
+  const dentroDeWidget = fixture(
+    'theme-repo/Base/widgets/easy.checkout/Templates/pagamento.template',
+  );
+
+  test('Templates/ identifica a raiz quando não há sinal forte', () => {
+    assert.equal(findThemeRoot(master, undefined, [workspace]), base);
+  });
+
+  test('vence o marcador mais externo, não o mais próximo do arquivo', () => {
+    // `Base/widgets/easy.checkout/` também tem `Templates/`. Parar nele faria
+    // `{% include /Templates/… %}` contar da pasta do widget.
+    assert.equal(findThemeRoot(dentroDeWidget, undefined, [workspace]), base);
+    assert.equal(
+      resolveIncludePath('/Templates/Painel/painel-menu.template', dentroDeWidget, undefined, [
+        workspace,
+      ]),
+      fixture('theme-repo/Base/Templates/Painel/painel-menu.template'),
+    );
+  });
+
+  test('sem pasta de workspace o sinal fraco não vale', () => {
+    // Fora de um workspace não há fronteira para a subida, e qualquer
+    // `Templates/` acima do arquivo seria coincidência do disco de quem edita.
+    assert.equal(findThemeRoot(master), undefined);
+  });
+
+  test('a configuração themeRoot continua tendo a última palavra', () => {
+    assert.equal(findThemeRoot(master, workspace, [workspace]), workspace);
+  });
+
+  test('o include com barra inicial conta da raiz detectada', () => {
+    assert.equal(
+      resolveIncludePath('/Templates/Painel/painel-menu.template', master, undefined, [workspace]),
+      fixture('theme-repo/Base/Templates/Painel/painel-menu.template'),
+    );
+    assert.equal(
+      resolveIncludePath('/Configs/vs', master, undefined, [workspace]),
+      fixture('theme-repo/Base/Configs/vs.template'),
+    );
+  });
+
+  test('o include sem barra continua resolvendo pela pasta do arquivo', () => {
+    assert.equal(
+      resolveIncludePath('includes/PageHeader.template', master, undefined, [workspace]),
+      fixture('theme-repo/Base/Templates/masters/includes/PageHeader.template'),
+    );
+  });
+});
+
+describe('esquema de deploy por tema: ~/Custom/Content/Themes/<tema>/…', () => {
+  const workspace = fixture('theme-repo');
+  const master = fixture('theme-repo/Base/Templates/masters/1Column.template');
+  const svg = fixture('theme-repo/Shared/Imagens/loading.svg');
+
+  test('<tema> é a pasta do tema irmão, sem manifesto nenhum', () => {
+    assert.equal(
+      resolveDeployPath('~/Custom/Content/Themes/Shared/Imagens/loading.svg', master, undefined, [
+        workspace,
+      ]),
+      svg,
+    );
+    assert.equal(
+      resolveDeployPath('/Themes/Shared/Imagens/loading.svg', master, undefined, [workspace]),
+      svg,
+    );
+  });
+
+  test('a caixa das letras não conta', () => {
+    // O mesmo arquivo aparece como `/Themes/Shared/…` e `/themes/shared/…` no
+    // mesmo repositório: o servidor não distingue, o Linux da CI distingue.
+    assert.equal(
+      resolveDeployPath('~/custom/content/themes/shared/imagens/LOADING.svg', master, undefined, [
+        workspace,
+      ]),
+      svg,
+    );
+  });
+
+  test('a querystring de cache-busting sai antes', () => {
+    assert.equal(
+      resolveDeployPath('/Themes/Shared/Imagens/loading.svg?v=2', master, undefined, [workspace]),
+      svg,
+    );
+  });
+
+  test('o include também aceita esse esquema, com a extensão implícita', () => {
+    const script = fixture('theme-repo/Shared/Crediario/script.template');
+    assert.equal(
+      resolveIncludePath('~/Custom/Content/Themes/Shared/Crediario/script', master, undefined, [
+        workspace,
+      ]),
+      script,
+    );
+    assert.equal(
+      resolveIncludePath(
+        '~/custom/content/themes/shared/crediario/script.template',
+        master,
+        undefined,
+        [workspace],
+      ),
+      script,
+    );
+  });
+
+  test('tema ou arquivo inexistente não vira link', () => {
+    assert.equal(
+      resolveDeployPath('/Themes/NaoExiste/Imagens/loading.svg', master, undefined, [workspace]),
+      undefined,
+    );
+    assert.equal(
+      resolveDeployPath('/Themes/Shared/Imagens/nao-existe.svg', master, undefined, [workspace]),
+      undefined,
+    );
+    // Uma pasta não é destino de link: `contentpath` numa pasta é concatenação.
+    assert.equal(
+      resolveDeployPath('/Themes/Shared/Imagens/', master, undefined, [workspace]),
+      undefined,
+    );
+  });
+});
+
 describe('caminho de include a partir do arquivo', () => {
   const root = fixture('site-project/html');
 

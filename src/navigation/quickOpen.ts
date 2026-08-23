@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 
 import { findThemeRoot } from '../core/theme.ts';
-import { isOnDisk, themeRootFor } from '../config.ts';
+import { isOnDisk, themeRootFor, workspaceRootsFor } from '../config.ts';
 
 interface TemplateItem extends vscode.QuickPickItem {
   uri?: vscode.Uri;
@@ -33,7 +33,7 @@ function activeThemeRoot(): string | undefined {
   if (!document || !isOnDisk(document)) {
     return undefined;
   }
-  return findThemeRoot(document.uri.fsPath, themeRootFor(document));
+  return findThemeRoot(document.uri.fsPath, themeRootFor(document), workspaceRootsFor(document));
 }
 
 /** Nome do site dono da raiz: a pasta `html/` sozinha não diz de quem ela é. */

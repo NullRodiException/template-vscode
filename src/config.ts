@@ -6,6 +6,7 @@
  */
 
 import * as vscode from 'vscode';
+import * as path from 'node:path';
 
 /**
  * `true` quando o documento tem um arquivo real por trás.
@@ -25,30 +26,57 @@ export function isOnDisk(document: vscode.TextDocument): boolean {
  */
 type Scope = vscode.TextDocument | vscode.Uri;
 
+/**
+ * Só o `TextDocument` tem `.uri`; a `Uri` é ela mesma. A checagem é por
+ * propriedade, e não `instanceof vscode.Uri`, porque o teste do bundle carrega
+ * a extensão com um stub de `vscode` onde `Uri` não é uma classe de verdade.
+ */
+function uriOf(scope: Scope): vscode.Uri {
+  return 'uri' in scope ? scope.uri : scope;
+}
+
 function setting(scope: Scope, key: string): string | undefined {
   const value = vscode.workspace.getConfiguration('linxLiquid', scope).get<string>(key, '');
   return value.trim() === '' ? undefined : value;
 }
 
+/**
+ * Caminho configurado, já absoluto.
+ *
+ * O manifesto promete que um valor relativo conta da pasta do workspace, mas
+ * quem recebia o valor cru chamava `path.resolve`, que conta do diretório de
+ * trabalho do processo — no Extension Host, a pasta de instalação do VS Code.
+ * Um `themeRoot: "Base"` resolvia para dentro do editor e não achava nada.
+ */
+function pathSetting(scope: Scope, key: string): string | undefined {
+  const value = setting(scope, key);
+  if (value === undefined || path.isAbsolute(value)) {
+    return value;
+  }
+  const owner = vscode.workspace.getWorkspaceFolder(uriOf(scope))?.uri.fsPath;
+  return owner ? path.join(owner, value) : value;
+}
+
 /** `linxLiquid.themeRoot`, ou `undefined` para detectar automaticamente. */
 export function themeRootFor(scope: Scope): string | undefined {
-  return setting(scope, 'themeRoot');
+  return pathSetting(scope, 'themeRoot');
 }
 
 /** `linxLiquid.sharedThemeRoot`, ou `undefined` se não configurado. */
 export function sharedThemeRootFor(document: vscode.TextDocument): string | undefined {
-  return setting(document, 'sharedThemeRoot');
+  return pathSetting(document, 'sharedThemeRoot');
 }
 
 /**
- * Pastas do workspace usadas para resolver includes quando não há raiz de tema.
+ * Pastas do workspace, usadas para resolver includes quando não há raiz de tema
+ * e como fronteira da detecção automática da raiz.
  *
  * A pasta dona do arquivo vem primeiro; as demais entram como fallback para
  * workspaces multi-root, onde o include pode apontar para outra pasta.
  */
-export function workspaceRootsFor(document: vscode.TextDocument): string[] {
+export function workspaceRootsFor(scope: Scope): string[] {
   const all = (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);
-  const owner = vscode.workspace.getWorkspaceFolder(document.uri)?.uri.fsPath;
+  const owner = vscode.workspace.getWorkspaceFolder(uriOf(scope))?.uri.fsPath;
   if (!owner) {
     return all;
   }

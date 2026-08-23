@@ -1,0 +1,3 @@
+{% include includes/PageHeader.template with FileSearcher:Master %}
+{% include /Templates/Painel/painel-menu.template %}
+<img src="{{ '~/Custom/Content/Themes/Shared/Imagens/loading.svg' | contentpath }}" />

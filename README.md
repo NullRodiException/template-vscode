@@ -60,9 +60,9 @@ Pressionar de novo com o cursor dentro do bloco descomenta.
 | `Ctrl+Click` ou `F12` | Abre o arquivo de um `{% include %}`, de um `template="…"` ou de um `\| themepath` |
 | `Alt+O` | Alterna entre `components/X.template` e `Scripts/components/X.js` |
 
-A resolução cobre os dois esquemas de caminho que convivem no projeto: o de **fonte** (`/Pages/OnePageCheckout/…`, igual à árvore local) e o de **deploy** (`~/Custom/Content/Widgets/<folder>/…`), traduzido pelo atributo `folder` do `manifest.xml`. `F12` e `Alt+F12` (Peek) usam o mesmo resolvedor do Ctrl+Click.
+A resolução cobre os esquemas de caminho que convivem no projeto: o de **fonte** (`/Pages/OnePageCheckout/…`, igual à árvore local) e os dois de **deploy** — `~/Custom/Content/Widgets/<folder>/…`, traduzido pelo atributo `folder` do `manifest.xml`, e `~/Custom/Content/Themes/<tema>/…`, onde `<tema>` é a pasta do tema irmão. O segundo não passa por manifesto nenhum, e é o que resolve num clone que não tem `manifest.xml`. `F12` e `Alt+F12` (Peek) usam o mesmo resolvedor do Ctrl+Click.
 
-A raiz de onde esses caminhos contam é descoberta subindo os diretórios: a pasta que contém `Pages/` no widget avulso, ou a `<site>/html/` no repositório de sites — inclusive nos sites que só têm `Components/`, e a partir de arquivos fora dela (`src/scss/…`, por exemplo).
+A raiz de onde esses caminhos contam é descoberta subindo os diretórios: a pasta que contém `Pages/` no widget avulso, a `<site>/html/` no repositório de sites — inclusive nos sites que só têm `Components/`, e a partir de arquivos fora dela (`src/scss/…`, por exemplo) — e, num repositório de temas com `Base/`, `Moda/` e `Shared/` lado a lado, a pasta do tema que tem `Templates/`, `Components/` ou `Configs/`. Esse último sinal é fraco de propósito: só entra quando não há `Pages/` nem `html/` em toda a subida, e nunca acima das pastas abertas no workspace.
 
 O Outline e os breadcrumbs listam os `<template id="tpl-…">`, os `<script>`/`<style>` e os `{% capture %}`/`{% assign %}` — o que se procura num arquivo de 240 linhas.
 
@@ -118,7 +118,7 @@ Quem decide se ele aparece é o tema de ícones ativo: o VS Code só gera a regr
 
 | Opção | Padrão | Para quê |
 |---|---|---|
-| `linxLiquid.themeRoot` | detecção automática | Raiz do tema (a pasta que contém `Pages/`, ou a `html/` do site). Só defina se a detecção falhar |
+| `linxLiquid.themeRoot` | detecção automática | Raiz do tema (a pasta que contém `Pages/`, a `html/` do site, ou a pasta do tema num repositório de temas). Absoluta ou relativa à pasta do workspace. Só defina se a detecção falhar |
 | `linxLiquid.sharedThemeRoot` | vazio | Raiz do tema compartilhado, para o filtro `\| sharedthemepath` |
 | `linxLiquid.diagnostics.enabled` | `true` | Liga/desliga os diagnósticos |
 | `linxLiquid.format.onSave` | `true` | Indenta ao salvar. Independe de `editor.formatOnSave` |

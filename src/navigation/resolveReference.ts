@@ -27,10 +27,10 @@ export function resolveReference(
     case 'include':
       return resolveIncludePath(reference.path, file, themeRoot, roots);
     case 'theme':
-      return resolveThemePath(reference.path, file, themeRoot);
+      return resolveThemePath(reference.path, file, themeRoot, roots);
     case 'deploy':
       return (
-        resolveDeployPath(reference.path, file, themeRoot) ??
+        resolveDeployPath(reference.path, file, themeRoot, roots) ??
         // `template=` às vezes aparece com caminho de fonte.
         resolveIncludePath(reference.path, file, themeRoot, roots)
       );
