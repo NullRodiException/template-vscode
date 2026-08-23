@@ -34,7 +34,9 @@ A restrição não é excesso de zelo: a árvore HTML destes arquivos não é ba
 
 Ficam intocados: o corpo de `<script>` e `<style>`, mustaches do Vue quebrados em várias linhas, e o interior de comentários.
 
-Além do formatador, `indentationRules` e `onEnterRules` dão indentação automática enquanto você digita.
+**Salvar formata.** Não é preciso configurar nada: a extensão indenta o arquivo no save, em qualquer máquina, e `linxLiquid.format.onSave` desliga. Quem já tem `editor.formatOnSave` ligado para a linguagem continua com o formatador do editor — a extensão sai de cena em vez de aplicar tudo duas vezes.
+
+Fechar uma estrutura também formata na hora: digitar o `>` de `</div>` ou o `}` de `{% endif %}` traz a linha de volta ao nível da abertura, sem esperar o save. O `indentationRules` só age no Enter, quando o fechamento ainda não foi escrito, então até aqui a linha nascia um nível adentro e ficava.
 
 ### Dobra
 
@@ -119,12 +121,13 @@ Quem decide se ele aparece é o tema de ícones ativo: o VS Code só gera a regr
 | `linxLiquid.themeRoot` | detecção automática | Raiz do tema (a pasta que contém `Pages/`, ou a `html/` do site). Só defina se a detecção falhar |
 | `linxLiquid.sharedThemeRoot` | vazio | Raiz do tema compartilhado, para o filtro `\| sharedthemepath` |
 | `linxLiquid.diagnostics.enabled` | `true` | Liga/desliga os diagnósticos |
+| `linxLiquid.format.onSave` | `true` | Indenta ao salvar. Independe de `editor.formatOnSave` |
 | `linxLiquid.format.attributeIndent` | `oneLevel` | `preserve` mantém as linhas de continuação de atributo como estão |
 | `linxLiquid.autoClosingTags` | `true` | Digitar `>` escreve a tag de fechamento |
 
-Formatar ao salvar vem **desligado**. Para ligar só nesta linguagem e só neste workspace, rode **Linx: Configurar workspace** na paleta de comandos.
+Formatar ao salvar vem **ligado**, por conta da própria extensão. **Linx: Configurar workspace** continua útil para dois casos: passar a formatação para o pipeline do editor (`editor.formatOnSave` + `editor.defaultFormatter` no `.vscode/settings.json`), e destravar a formatação enquanto se digita para quem tem um `editor.formatOnType` próprio nas configurações do usuário — o padrão do manifesto não vence uma configuração explícita.
 
-Tab ou espaço vem do próprio editor (`editor.detectIndentation`), então cada arquivo mantém o estilo que já tinha — útil num projeto onde a indentação é inconsistente.
+Tab ou espaço vem do próprio editor (`editor.detectIndentation`), então cada arquivo mantém o estilo que já tinha — útil num projeto onde a indentação é inconsistente. No save de uma aba que não está à vista não há editor para consultar, e aí o estilo é deduzido do próprio texto, pelo mesmo motivo: um arquivo de tab não pode virar espaço porque foi salvo em segundo plano.
 
 ## Desenvolvimento
 

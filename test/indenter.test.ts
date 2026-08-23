@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 
 import {
   computeIndentation,
+  detectIndentation,
   formatText,
   DEFAULT_OPTIONS,
   type IndentOptions,
@@ -268,5 +269,91 @@ describe('formatador — alarme de dialeto', () => {
 
   test('as opções padrão usam tab, como a maioria do corpus', () => {
     assert.equal(DEFAULT_OPTIONS.insertSpaces, false);
+  });
+});
+
+describe('linha recém-fechada — o que o format on type entrega', () => {
+  /** O provider pega só o edit da linha do cursor; aqui o teste faz o mesmo. */
+  function editAt(text: string, line: number) {
+    return computeIndentation(text, SPACES).find((e) => e.line === line);
+  }
+
+  test('o {% endif %} digitado dentro do bloco volta para o nível da abertura', () => {
+    // `indentationRules` decide a indentação no Enter, quando o fechamento
+    // ainda não foi escrito: a linha nasce um nível adentro e só o formatador
+    // a traz de volta.
+    assert.equal(editAt('{% if a %}\n  <p></p>\n  {% endif %}\n', 2)?.newIndent, '');
+  });
+
+  test('o </div> digitado dentro do elemento volta para o nível da abertura', () => {
+    assert.equal(editAt('<div>\n  <p></p>\n  </div>\n', 2)?.newIndent, '');
+  });
+
+  test('o {% else %} dedenta sem mexer no que vem depois', () => {
+    assert.equal(editAt('{% if a %}\n  <p></p>\n  {% else %}\n', 2)?.newIndent, '');
+  });
+
+  test('linha já no lugar certo não gera edit', () => {
+    assert.equal(editAt('{% if a %}\n  <p></p>\n{% endif %}\n', 2), undefined);
+  });
+
+  test('continuação de mustache multi-linha fica intocada', () => {
+    // Digitar o `}}` de um `{{ … }}` quebrado em linhas não pode reindentar a
+    // linha: o texto renderizado mudaria.
+    assert.equal(editAt('<p>\n  {{ nome |\n  currency }}\n</p>\n', 2), undefined);
+  });
+});
+
+describe('detecção do estilo de indentação', () => {
+  test('arquivo com tab', () => {
+    const text = '<div>\n\t<p>\n\t\t<span></span>\n\t</p>\n</div>\n';
+    assert.deepEqual(detectIndentation(text), { insertSpaces: false, tabSize: 4 });
+  });
+
+  test('arquivo com dois espaços', () => {
+    const text = '<div>\n  <p>\n    <span></span>\n  </p>\n</div>\n';
+    assert.deepEqual(detectIndentation(text), { insertSpaces: true, tabSize: 2 });
+  });
+
+  test('arquivo com quatro espaços', () => {
+    const text = '<div>\n    <p>\n        <span></span>\n    </p>\n</div>\n';
+    assert.deepEqual(detectIndentation(text), { insertSpaces: true, tabSize: 4 });
+  });
+
+  test('mistura resolve pela maioria', () => {
+    // Acontece de verdade quando alguém edita um arquivo de tab com o editor
+    // configurado em espaço; o estilo dominante é que deve prevalecer.
+    const text = '<div>\n\t<p></p>\n\t<p></p>\n  <p></p>\n</div>\n';
+    assert.deepEqual(detectIndentation(text), { insertSpaces: false, tabSize: 4 });
+  });
+
+  test('sem linha indentada não há o que deduzir', () => {
+    assert.equal(detectIndentation('{% assign x = 1 %}\n<p></p>\n\n'), null);
+    assert.equal(detectIndentation(''), null);
+  });
+
+  test('passo de quatro não é confundido com dois pelo salto de dois níveis', () => {
+    // Um `</div>` que volta dois níveis de uma vez produz distância de 8; se o
+    // desempate olhasse só o maior valor, o arquivo viraria 8 espaços.
+    const text = '<a>\n    <b>\n        <c>\n            <d></d>\n        </c>\n    </b>\n</a>\n';
+    assert.deepEqual(detectIndentation(text), { insertSpaces: true, tabSize: 4 });
+  });
+
+  corpusTest('cada arquivo do corpus é detectado com o estilo que já tem', () => {
+    for (const file of allTemplates()) {
+      const text = read(file);
+      const detected = detectIndentation(text);
+      if (!detected) {
+        continue;
+      }
+      // Formatar com o estilo detectado não pode reescrever o arquivo inteiro:
+      // é exatamente o que aconteceria se a detecção errasse tab por espaço.
+      const edits = computeIndentation(text, { ...DEFAULT_OPTIONS, ...detected });
+      const indented = text.split('\n').filter((l) => /^\s+\S/.test(l)).length;
+      assert.ok(
+        edits.length <= indented / 2,
+        `${file}: ${edits.length} de ${indented} linhas indentadas mudariam — detecção provavelmente trocou o estilo`,
+      );
+    }
   });
 });

@@ -59,7 +59,7 @@ async function toggleComment(): Promise<void> {
 }
 
 /**
- * Liga `formatOnSave` e o Emmet para esta linguagem no workspace.
+ * Liga `formatOnSave`, `formatOnType` e o Emmet para esta linguagem no workspace.
  *
  * Precisa ser explícito: `configurationDefaults` do manifesto perde para as
  * configurações globais do usuário, então só um `.vscode/settings.json` do
@@ -78,7 +78,14 @@ async function setupWorkspace(extensionId: string): Promise<void> {
     // O id vem do próprio manifesto: escrever `local.linx-liquid-template` aqui
     // faria a configuração apontar para um formatador inexistente no dia em que
     // o `publisher` mudasse.
-    { 'editor.formatOnSave': true, 'editor.defaultFormatter': extensionId },
+    //
+    // `formatOnType` também vem do manifesto, mas pelo mesmo motivo do Emmet:
+    // quem já tem um `editor.formatOnType` próprio nunca enxerga esse padrão.
+    {
+      'editor.formatOnSave': true,
+      'editor.defaultFormatter': extensionId,
+      'editor.formatOnType': true,
+    },
     vscode.ConfigurationTarget.Workspace,
   );
 
@@ -96,7 +103,7 @@ async function setupWorkspace(extensionId: string): Promise<void> {
   }
 
   void vscode.window.showInformationMessage(
-    'Arquivos .template passam a ser formatados ao salvar neste workspace, e o Emmet passa a expandir neles.',
+    'Arquivos .template passam a ser formatados ao salvar e enquanto você digita neste workspace, e o Emmet passa a expandir neles.',
   );
 }
 

@@ -2,7 +2,7 @@
   "name": "linx-liquid-template",
   "displayName": "Linx Liquid Template",
   "description": "Suporte a arquivos .template do Liquid da Linx Commerce: highlight, indentação, comentar bloco, navegação e diagnósticos.",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -165,6 +165,11 @@
           "default": true,
           "description": "Reporta problemas específicos do dialeto: raw/endraw desbalanceado, bloco Liquid sem fechamento, {% comment %} dentro de raw, Liquid ativo dentro de comentário HTML, filtro usado do lado errado do {% raw %} e include para arquivo inexistente."
         },
+        "linxLiquid.format.onSave": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Indenta o arquivo ao salvar. Independe de `editor.formatOnSave`, que a extensão não consegue ligar sozinha; quando essa opção do editor já está ligada para a linguagem, quem formata é ele e esta aqui sai de cena."
+        },
         "linxLiquid.format.attributeIndent": {
           "type": "string",
           "enum": [
@@ -184,6 +189,9 @@
     "configurationDefaults": {
       "emmet.includeLanguages": {
         "linx-liquid": "html"
+      },
+      "[linx-liquid]": {
+        "editor.formatOnType": true
       }
     }
   },

@@ -37,6 +37,72 @@ export const DEFAULT_OPTIONS: IndentOptions = {
   attributeIndent: 'oneLevel',
 };
 
+/** Tab-ou-espaço e o tamanho do passo, sem as opções que vêm da extensão. */
+export type IndentStyle = Pick<IndentOptions, 'insertSpaces' | 'tabSize'>;
+
+/**
+ * Deduz o estilo de indentação a partir do próprio texto.
+ *
+ * Serve ao caminho de salvar, onde não existe `FormattingOptions`: quem as
+ * resolve é o editor, a partir de `editor.detectIndentation`, e um documento
+ * salvo por *Save All* pode não estar visível em editor nenhum. Cair na
+ * configuração global nesse caso converteria em espaço um arquivo escrito com
+ * tab — num corpus em que 60% usa tab e 40% usa espaço, isso trocaria a
+ * indentação inteira de um arquivo que ninguém pediu para tocar.
+ *
+ * @returns `null` quando não há uma única linha indentada, e portanto nada em
+ * que se basear.
+ */
+export function detectIndentation(text: string): IndentStyle | null {
+  let tabs = 0;
+  let spaces = 0;
+  /** Quantas vezes cada distância entre indentações consecutivas apareceu. */
+  const steps = new Map<number, number>();
+  let previousWidth = -1;
+
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/\r$/, '');
+    const firstNonWs = line.search(/\S/);
+    // Linha em branco ou encostada na margem não diz nada sobre o estilo.
+    if (firstNonWs <= 0) {
+      continue;
+    }
+
+    const indent = line.slice(0, firstNonWs);
+    if (indent.includes('\t')) {
+      tabs++;
+      continue;
+    }
+
+    spaces++;
+    if (previousWidth >= 0 && firstNonWs !== previousWidth) {
+      const step = Math.abs(firstNonWs - previousWidth);
+      steps.set(step, (steps.get(step) ?? 0) + 1);
+    }
+    previousWidth = firstNonWs;
+  }
+
+  if (tabs === 0 && spaces === 0) {
+    return null;
+  }
+  if (tabs >= spaces) {
+    // O tamanho do tab é decisão de exibição do editor, não do arquivo.
+    return { insertSpaces: false, tabSize: DEFAULT_OPTIONS.tabSize };
+  }
+
+  let size = 0;
+  let best = 0;
+  for (const [step, count] of steps) {
+    // Empate resolve no passo menor: um arquivo de 4 espaços produz também
+    // distâncias de 8 (dois níveis de uma vez), nunca o contrário.
+    if (count > best || (count === best && step < size)) {
+      best = count;
+      size = step;
+    }
+  }
+  return { insertSpaces: true, tabSize: size > 0 ? size : DEFAULT_OPTIONS.tabSize };
+}
+
 export interface IndentEdit {
   /** Linha 0-indexada. */
   line: number;

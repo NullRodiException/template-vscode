@@ -87,6 +87,7 @@ function makeVscodeStub() {
     languages: {
       registerDocumentFormattingEditProvider: registerLanguageFeature,
       registerDocumentRangeFormattingEditProvider: registerLanguageFeature,
+      registerOnTypeFormattingEditProvider: registerLanguageFeature,
       registerDocumentLinkProvider: registerLanguageFeature,
       registerDefinitionProvider: registerLanguageFeature,
       registerFoldingRangeProvider: registerLanguageFeature,
@@ -107,6 +108,7 @@ function makeVscodeStub() {
       onDidCloseTextDocument: noop,
       onDidChangeConfiguration: noop,
       onDidSaveTextDocument: noop,
+      onWillSaveTextDocument: noop,
       createFileSystemWatcher: () => ({
         onDidCreate: noop,
         onDidChange: noop,
@@ -122,6 +124,7 @@ function makeVscodeStub() {
     },
     window: {
       activeTextEditor: undefined,
+      visibleTextEditors: [],
       showQuickPick: async () => undefined,
       showTextDocument: async () => ({}),
       showInformationMessage() {},
@@ -339,6 +342,7 @@ describe('manifesto', () => {
       'linxLiquid.themeRoot',
       'linxLiquid.sharedThemeRoot',
       'linxLiquid.diagnostics.enabled',
+      'linxLiquid.format.onSave',
       'linxLiquid.format.attributeIndent',
       'linxLiquid.autoClosingTags',
     ]) {
@@ -352,5 +356,18 @@ describe('manifesto', () => {
     assert.deepEqual(manifest.contributes.configurationDefaults['emmet.includeLanguages'], {
       'linx-liquid': 'html',
     });
+  });
+
+  test('o format on type vem ligado para a linguagem', () => {
+    // O provider de on-type só é consultado quando `editor.formatOnType` está
+    // ligado, e ele vem desligado no editor. Sem este default o registro existe
+    // e nunca é chamado; quem já tem a opção nas próprias configurações precisa
+    // do comando "Configurar workspace", que grava a mesma coisa no workspace.
+    assert.equal(
+      (manifest.contributes.configurationDefaults['[linx-liquid]'] as Record<string, unknown>)?.[
+        'editor.formatOnType'
+      ],
+      true,
+    );
   });
 });
