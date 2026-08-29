@@ -1,6 +1,32 @@
 /**
  * Formatador de indentação para `.template` da Linx.
  *
+ * ## Como o nível de uma linha sai
+ *
+ * Uma pilha só, de elementos HTML e blocos Liquid juntos, em que cada frame
+ * guarda o **nível em que a sua linha de abertura foi impressa** — não a posição
+ * dele na pilha. Daí saem as quatro regras:
+ *
+ * - **linha de conteúdo**: um adiante do frame aberto mais fundo. O *maior*
+ *   nível, não o do topo, porque depois de um `{% end… %}` a pilha guarda o que
+ *   ramos diferentes deixaram aberto e esses níveis não vêm em ordem;
+ * - **fechamento HTML**: vai para o nível do elemento que ele fecha e o
+ *   desempilha — `index.template:25` volta ao nível da `<div>` da linha 7, que
+ *   foi aberta em outro ramo de outro bloco;
+ * - **tag de bloco Liquid**: o menor entre o nível de antes e o de depois do
+ *   bloco. Um bloco que só abre elementos ancora no que veio antes; um que fecha
+ *   elementos de fora ancora no que sobra depois. Assim a tag nunca fica à
+ *   direita do HTML que vem antes dela nem do HTML que ela mesma fecha;
+ * - **ramos**: o que um ramo deixa aberto sai da pilha na tag do meio, senão o
+ *   ramo seguinte nasceria mais fundo que o anterior, e todos voltam no
+ *   `{% end… %}`.
+ *
+ * O que não funciona aqui é contar altura de pilha: o ramo de um `{% if %}` abre
+ * elementos e não os fecha (`index.template:1-8` abre três `<div>`), quem os
+ * fecha é um `</div>` depois do bloco ou dentro de outro ramo, e o `{% endif %}`
+ * acaba tantos níveis à frente do seu `{% if %}` quantos o ramo tiver deixado
+ * abertos.
+ *
  * ## A garantia
  *
  * Cada linha produz no máximo **um** edit, e esse edit substitui exclusivamente o
@@ -18,7 +44,13 @@
  * Sem dependência de `vscode`, para poder ser testado com `node --test`.
  */
 
-import { isBlockTag, isEndTag, isMiddleTag, VOID_ELEMENTS } from '../core/liquidTags.ts';
+import {
+  isBlockTag,
+  isEndTag,
+  isMiddleTag,
+  ownsMiddle,
+  VOID_ELEMENTS,
+} from '../core/liquidTags.ts';
 import { scan, regionsByLine, type Region, type RegionKind } from '../core/scanner.ts';
 
 export interface IndentOptions {
@@ -112,19 +144,55 @@ export interface IndentEdit {
   oldIndentLength: number;
 }
 
-type Frame = { kind: 'html' | 'liquid'; tag: string };
+/**
+ * Elemento HTML ou bloco Liquid aberto.
+ *
+ * `level` é o nível em que a **linha de abertura** foi impressa, e não a posição
+ * do frame na pilha. É essa distinção que faz um `<div>` que ganhou um nível por
+ * estar dentro de um `{% if %}` passar esse nível ao filho — o `<component>` de
+ * `index.template:18` fica um adiante da `<div>` da linha 16, que está um
+ * adiante do `{% if %}` da 15.
+ */
+interface HtmlFrame {
+  kind: 'html';
+  tag: string;
+  level: number;
+}
 
+/**
+ * Bloco Liquid aberto.
+ *
+ * `carried` guarda o que os ramos já encerrados deixaram aberto em HTML: sai da
+ * pilha na tag do meio, senão cada ramo nasceria mais fundo que o anterior, e
+ * volta inteiro no `{% end… %}`, porque é depois do bloco que os `</div>`
+ * órfãos de `index.template:31,36` aparecem para fechá-lo.
+ *
+ * `ordinal` é a posição do bloco no documento, contada na ordem em que abrem.
+ * É a chave do nível "de depois" entre uma passada e outra — ver
+ * `computeIndentation`.
+ */
+interface BlockFrame {
+  kind: 'liquid';
+  tag: string;
+  level: number;
+  ordinal: number;
+  carried: HtmlFrame[];
+}
+
+type Frame = HtmlFrame | BlockFrame;
+
+/** O que uma linha faz com a estrutura. */
 type Event =
-  | { type: 'open'; frame: Frame }
+  | { type: 'open'; kind: 'html' | 'liquid'; tag: string }
   | { type: 'close'; kind: 'html' | 'liquid'; tag: string }
-  | { type: 'middle' };
+  | { type: 'middle'; tag: string };
 
 interface PendingTag {
   tag: string;
   /** Nível em que a linha de abertura da tag ficou. */
   level: number;
-  /** Profundidade da pilha quando a tag abriu, para medir aninhamento Liquid interno. */
-  stackDepth: number;
+  /** Profundidade das pilhas quando a tag abriu, para medir aninhamento interno. */
+  depth: number;
 }
 
 interface LineState {
@@ -200,11 +268,11 @@ function emitLiquidEvent(events: Event[], name: string): void {
     return;
   }
   if (isBlockTag(name)) {
-    events.push({ type: 'open', frame: { kind: 'liquid', tag: name } });
+    events.push({ type: 'open', kind: 'liquid', tag: name });
   } else if (isEndTag(name)) {
     events.push({ type: 'close', kind: 'liquid', tag: name.slice(3) });
   } else if (isMiddleTag(name)) {
-    events.push({ type: 'middle' });
+    events.push({ type: 'middle', tag: name });
   }
   // Todo o resto — incluindo raw/endraw e as 12 tags proprietárias — é neutro de
   // propósito. Assim uma 13ª tag da Linx nunca desbalanceia a pilha.
@@ -246,7 +314,7 @@ function scanLine(line: string, state: LineState): ScanResult {
     closerAtStart =
       firstNonWs >= 0 && (line[firstNonWs] === '>' || line.startsWith('/>', firstNonWs));
     if (!rest.selfClosing && !VOID_ELEMENTS.has(state.pending.tag)) {
-      events.push({ type: 'open', frame: { kind: 'html', tag: state.pending.tag } });
+      events.push({ type: 'open', kind: 'html', tag: state.pending.tag });
     }
     state.pending = null;
   }
@@ -301,11 +369,11 @@ function scanLine(line: string, state: LineState): ScanResult {
         i = rest.index;
         if (!rest.closed) {
           // Continua nas próximas linhas; o chamador preenche level/stackDepth.
-          state.pending = { tag, level: 0, stackDepth: 0 };
+          state.pending = { tag, level: 0, depth: 0 };
           return { events, closedPending, closerAtStart };
         }
         if (!rest.selfClosing && !VOID_ELEMENTS.has(tag)) {
-          events.push({ type: 'open', frame: { kind: 'html', tag } });
+          events.push({ type: 'open', kind: 'html', tag });
         }
         continue;
       }
@@ -321,62 +389,189 @@ function scanLine(line: string, state: LineState): ScanResult {
 }
 
 /**
- * Desempilha até o frame correspondente, tolerando desbalanceamento.
+ * Nível de uma linha de conteúdo: um adiante do frame aberto mais fundo.
  *
- * Busca no máximo 3 níveis e nunca atravessa um frame de outro tipo. Um
- * fechamento sem abertura correspondente — `basket.template:119` tem um
- * `</span>` órfão — é ignorado, em vez de esvaziar a pilha e desalinhar todo o
- * resto do arquivo.
+ * O maior nível, não o do topo: depois de um `{% end… %}` a pilha guarda o que
+ * ramos diferentes deixaram aberto, e esses níveis não vêm em ordem — em
+ * `index.template:9` ela é `[facets@1, content@2, new-facets@1]`, e a linha sai
+ * em 3.
  */
-function popTolerant(stack: Frame[], kind: 'html' | 'liquid', tag: string): number {
-  const top = stack[stack.length - 1];
-  if (top && top.kind === kind && top.tag === tag) {
-    stack.pop();
-    return 1;
-  }
-
-  const limit = Math.max(0, stack.length - 3);
-  for (let i = stack.length - 1; i >= limit; i--) {
-    const frame = stack[i];
-    if (frame.kind !== kind) {
-      // Não atravessa fronteira de frame Liquid: é o que faz o <form> de
-      // register.template — aberto na linha 19, fechado na 120, com um bloco
-      // Liquid inteiro no meio — sobreviver.
-      break;
-    }
-    if (frame.tag === tag) {
-      const popped = stack.length - i;
-      stack.length = i;
-      return popped;
+function contentLevel(frames: Frame[]): number {
+  let deepest = -1;
+  for (const frame of frames) {
+    if (frame.level > deepest) {
+      deepest = frame.level;
     }
   }
-  return 0;
+  return deepest + 1;
 }
 
 /**
- * Aplica os eventos à pilha e devolve o nível da própria linha: parte do topo e
- * desconta os fechamentos que ocorrem antes de qualquer abertura.
+ * Índice do elemento que este fechamento encerra, ou `-1`.
+ *
+ * Bloco Liquid no caminho não atrapalha — o `</div>` de `index.template:25` está
+ * dentro de um `{% if %}` e fecha uma `<div>` aberta antes dele. O teto de três
+ * elementos é que segura o fechamento órfão: `basket.template:119` tem um
+ * `</span>` sem abertura, e sem o teto ele esvaziaria a pilha.
  */
-function processEvents(stack: Frame[], events: Event[]): number {
-  let level = stack.length;
-  let seenOpen = false;
+function findHtmlFrame(frames: Frame[], tag: string): number {
+  let crossed = 0;
+  for (let i = frames.length - 1; i >= 0; i--) {
+    const frame = frames[i];
+    if (frame.kind !== 'html') {
+      continue;
+    }
+    if (frame.tag === tag) {
+      return i;
+    }
+    if (++crossed === 3) {
+      break;
+    }
+  }
+  return -1;
+}
+
+/** Índice do bloco Liquid procurado, ou `-1`. Tolera até três blocos que não casam. */
+function findBlockFrame(frames: Frame[], matches: (frame: BlockFrame) => boolean): number {
+  let crossed = 0;
+  for (let i = frames.length - 1; i >= 0; i--) {
+    const frame = frames[i];
+    if (frame.kind !== 'liquid') {
+      continue;
+    }
+    if (matches(frame)) {
+      return i;
+    }
+    if (++crossed === 3) {
+      break;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Nível da abertura de um bloco Liquid: o menor entre o nível de antes e o de
+ * depois do bloco.
+ *
+ * É o que faz a tag de bloco seguir o HTML. Um bloco que só abre elementos
+ * ancora no que veio antes (`index.template:15`: antes 5, depois 7, fica em 5);
+ * um que fecha elementos abertos fora dele ancora no que sobra depois
+ * (`index.template:19`: antes 7, depois 5, fica em 5; e a linha 24: antes 3,
+ * depois 0, fica em 0). Dito de outro jeito, a tag nunca fica à direita do HTML
+ * que vem antes dela nem do HTML que ela mesma fecha.
+ *
+ * Sem o nível de depois — bloco ainda sem `{% end… %}`, que é o caso de quem
+ * está digitando — vale só o de antes.
+ */
+function blockLevel(pass: PassState, before: number): number {
+  const after = pass.after.get(pass.opened);
+  return after === undefined ? before : Math.min(before, after);
+}
+
+/**
+ * O nível da linha, decidido pelo seu primeiro evento.
+ *
+ * Só o primeiro conta porque é ele que começa a linha: o que vem depois muda a
+ * pilha para as linhas seguintes, não o recuo desta.
+ */
+function lineLevelOf(pass: PassState, events: Event[]): number {
+  const level = contentLevel(pass.frames);
+  const first = events[0];
+  if (!first) {
+    return level;
+  }
+
+  if (first.type === 'open') {
+    return first.kind === 'liquid' ? blockLevel(pass, level) : level;
+  }
+
+  if (first.type === 'middle') {
+    const index = findBlockFrame(pass.frames, (frame) => ownsMiddle(frame.tag, first.tag));
+    // `{% else %}` sem bloco: mantém o dedent de sempre.
+    return index === -1 ? Math.max(0, level - 1) : pass.frames[index].level;
+  }
+
+  if (first.kind === 'liquid') {
+    const index = findBlockFrame(pass.frames, (frame) => frame.tag === first.tag);
+    return index === -1 ? level : pass.frames[index].level;
+  }
+
+  const index = findHtmlFrame(pass.frames, first.tag);
+  return index === -1 ? level : pass.frames[index].level;
+}
+
+/** Os frames HTML de uma fatia da pilha, na ordem. */
+function htmlOnly(frames: Frame[]): HtmlFrame[] {
+  return frames.filter((frame): frame is HtmlFrame => frame.kind === 'html');
+}
+
+/**
+ * Aplica os eventos à pilha.
+ *
+ * `openLevel` é o nível impresso da linha, que cada elemento aberto aqui guarda
+ * para o seu fechamento reencontrar.
+ */
+function applyEvents(pass: PassState, events: Event[], openLevel: number): void {
+  const { frames } = pass;
 
   for (const event of events) {
     if (event.type === 'open') {
-      seenOpen = true;
-      stack.push(event.frame);
-    } else if (event.type === 'middle') {
-      if (!seenOpen) {
-        level -= 1;
+      if (event.kind === 'liquid') {
+        frames.push({
+          kind: 'liquid',
+          tag: event.tag,
+          level: blockLevel(pass, contentLevel(frames)),
+          ordinal: pass.opened,
+          carried: [],
+        });
+        pass.opened++;
+      } else {
+        frames.push({ kind: 'html', tag: event.tag, level: openLevel });
       }
-    } else {
-      const popped = popTolerant(stack, event.kind, event.tag);
-      if (popped > 0 && !seenOpen) {
-        level -= popped;
+      continue;
+    }
+
+    if (event.type === 'middle') {
+      const index = findBlockFrame(frames, (frame) => ownsMiddle(frame.tag, event.tag));
+      if (index === -1) {
+        continue;
+      }
+      const block = frames[index] as BlockFrame;
+      // Bloco Liquid aberto dentro do ramo e nunca fechado morre aqui: mantê-lo
+      // empilhado empurraria o resto do arquivo.
+      block.carried.push(...htmlOnly(frames.splice(index + 1)));
+      continue;
+    }
+
+    if (event.kind === 'liquid') {
+      const index = findBlockFrame(frames, (frame) => frame.tag === event.tag);
+      if (index === -1) {
+        // `{% endif %}` sem abertura: ignorado, como o `</span>` órfão do HTML.
+        continue;
+      }
+      const block = frames[index] as BlockFrame;
+      const opened = htmlOnly(frames.splice(index + 1));
+      frames.splice(index, 1);
+      // Os ramos anteriores primeiro: é a ordem em que os fechamentos de depois
+      // do bloco os encontram (`index.template:25` fecha o do último ramo).
+      frames.push(...block.carried, ...opened);
+      pass.observed.set(block.ordinal, contentLevel(frames));
+      continue;
+    }
+
+    const index = findHtmlFrame(frames, event.tag);
+    if (index === -1) {
+      continue;
+    }
+    frames.splice(index, 1);
+    // O que ficou aberto dentro do elemento vai junto; bloco Liquid fica, senão
+    // o `{% else %}` perderia o seu `{% if %}`.
+    for (let i = frames.length - 1; i >= index; i--) {
+      if (frames[i].kind === 'html') {
+        frames.splice(i, 1);
       }
     }
   }
-  return Math.max(0, level);
 }
 
 /** Regiões cujo conteúdo é opaco: nem indentado, nem contado. */
@@ -401,16 +596,25 @@ const VERBATIM = -1;
  * Devolve apenas as linhas cuja indentação muda; linhas em região opaca e
  * continuações de interpolação multi-linha não geram edit nenhum.
  */
-export function computeIndentation(
-  text: string,
-  options: IndentOptions = DEFAULT_OPTIONS,
-  regions: Region[] = scan(text),
-): IndentEdit[] {
-  const lines = text.split('\n');
-  const kinds = regionsByLine(text, regions);
-  const edits: IndentEdit[] = [];
+/** O estado de uma passada do cálculo. */
+interface PassState {
+  frames: Frame[];
+  /** Quantos blocos Liquid já abriram — o `ordinal` do próximo. */
+  opened: number;
+  /** Nível logo depois de cada bloco, medido na passada anterior. */
+  after: ReadonlyMap<number, number>;
+  /** O mesmo, medido nesta. */
+  observed: Map<number, number>;
+}
 
-  const stack: Frame[] = [];
+function runPass(
+  lines: string[],
+  kinds: RegionKind[],
+  options: IndentOptions,
+  after: ReadonlyMap<number, number>,
+): { edits: IndentEdit[]; observed: Map<number, number> } {
+  const edits: IndentEdit[] = [];
+  const pass: PassState = { frames: [], opened: 0, after, observed: new Map() };
   const state: LineState = { inInterpolation: false, interpolationCloser: '}}', pending: null };
 
   for (let ln = 0; ln < lines.length; ln++) {
@@ -452,12 +656,14 @@ export function computeIndentation(
         // (register.template:79).
         lineLevel = pendingBefore.level;
       } else {
-        lineLevel = pendingBefore.level + 1 + (stack.length - pendingBefore.stackDepth);
+        lineLevel = pendingBefore.level + 1 + (contentLevel(pass.frames) - pendingBefore.depth);
       }
-      // A pilha só cresce depois de decidir o nível desta linha.
-      processEvents(stack, events);
+      // A pilha só cresce depois de decidir o nível desta linha. O elemento que
+      // fecha aqui guarda o nível da linha que o abriu, não o desta.
+      applyEvents(pass, events, pendingBefore.level);
     } else {
-      lineLevel = processEvents(stack, events);
+      lineLevel = lineLevelOf(pass, events);
+      applyEvents(pass, events, lineLevel);
     }
 
     if (pendingBefore && !closedPending) {
@@ -465,8 +671,8 @@ export function computeIndentation(
       state.pending = pendingBefore;
     } else if (state.pending && state.pending !== pendingBefore) {
       // Uma tag abriu nesta linha e não fechou: as próximas são continuação.
-      state.pending.level = lineLevel === VERBATIM ? stack.length : lineLevel;
-      state.pending.stackDepth = stack.length;
+      state.pending.level = lineLevel === VERBATIM ? contentLevel(pass.frames) : lineLevel;
+      state.pending.depth = contentLevel(pass.frames);
     }
 
     if (lineLevel === VERBATIM) {
@@ -480,7 +686,48 @@ export function computeIndentation(
     }
   }
 
-  return edits;
+  return { edits, observed: pass.observed };
+}
+
+function sameLevels(a: ReadonlyMap<number, number>, b: ReadonlyMap<number, number>): boolean {
+  if (a.size !== b.size) {
+    return false;
+  }
+  for (const [key, value] of a) {
+    if (b.get(key) !== value) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/**
+ * Calcula a indentação de cada linha.
+ *
+ * Devolve apenas as linhas cuja indentação muda; linhas em região opaca e
+ * continuações de interpolação multi-linha não geram edit nenhum.
+ *
+ * São várias passadas porque a abertura de um bloco Liquid olha para o nível de
+ * *depois* do bloco (`blockLevel`), que só se conhece tendo percorrido o
+ * documento. A segunda passada já estabiliza no corpus — o nível de depois é
+ * decidido por elementos abertos fora do bloco, e esses não dependem de onde a
+ * tag do bloco foi parar. O teto de passadas é só garantia contra laço.
+ */
+export function computeIndentation(
+  text: string,
+  options: IndentOptions = DEFAULT_OPTIONS,
+  regions: Region[] = scan(text),
+): IndentEdit[] {
+  const lines = text.split('\n');
+  const kinds = regionsByLine(text, regions);
+
+  let after: ReadonlyMap<number, number> = new Map();
+  let pass = runPass(lines, kinds, options, after);
+  for (let i = 0; i < 3 && !sameLevels(after, pass.observed); i++) {
+    after = pass.observed;
+    pass = runPass(lines, kinds, options, after);
+  }
+  return pass.edits;
 }
 
 /** Aplica os edits ao texto. Usado pelos testes e pelo provider de formatação. */

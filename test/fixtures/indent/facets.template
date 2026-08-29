@@ -1,0 +1,37 @@
+{% if Request.IsMobileDevice %}
+  <div class="facets">
+    <button class="facets__close" @click="FixedFacetsOpened = false">x</button>                      
+    <div class="facets__content">
+      {% include /Pages/Grid-Products/Facets/selected-facets %}
+{% else %}
+  <div class="facets new-facets">
+{% endif %}
+      <div class="facets__group">
+        <div v-for="(facet, i) in Facets.filter(f=> VisibleFacets.includes(f.Alias))" :key="i" class="facets__type" :facet-alias="facet.Alias" :facet-type="facet.WidgetName">
+          <div class="facets__type__title" :class="{ opened: facet?.Opened }" @click="toggleOpenFacet(facet)">        
+            <span v-text="facet.Name?.replace('Categoria Roupas', 'Categoria')"></span>
+            {% icon (name="seta-baixo", width=13, height=7) %}
+          </div>
+          {% if true %}
+            <div class="facets__type__content" :class="{ opened: facet.Opened }">          
+          {% endif %}
+              <component :is="facet.WidgetName" :facet="facet"></component>
+          {% if true %}   
+            </div>    
+          {% endif %}  
+        </div>
+      </div>
+{% if Request.IsMobileDevice == false %}
+  </div>
+{% else %}
+      <label class="facets__see-more" for="facets-see-more">
+        <input type="checkbox" id="facets-see-more" class="hidden"></input>
+        Mais filtros
+      </label>
+    </div>
+
+    <div v-if="FilterInButtonClick" class="facets__buttons">
+      <button class="btn-1" @click="handleFilterButtonClick">FILTRAR</button>
+    </div>
+  </div>
+{% endif %}

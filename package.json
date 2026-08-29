@@ -2,7 +2,7 @@
   "name": "linx-liquid-template",
   "displayName": "Linx Liquid Template",
   "description": "Suporte a arquivos .template do Liquid da Linx Commerce: highlight, indentação, comentar bloco, navegação e diagnósticos.",
-  "version": "0.8.1",
+  "version": "0.8.3",
   "publisher": "local",
   "license": "MIT",
   "repository": {

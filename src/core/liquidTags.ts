@@ -502,6 +502,24 @@ export function isMiddleTag(name: string): boolean {
 }
 
 /**
+ * A qual bloco cada tag do meio pertence.
+ *
+ * O indentador precisa disso para reencontrar a abertura do bloco quando o ramo
+ * anterior deixou HTML aberto em cima dela — em `index.template:6` o
+ * `{% else %}` tem duas `<div>` por fechar entre ele e o seu `{% if %}`.
+ */
+export const MIDDLE_OWNERS: Record<string, readonly string[]> = {
+  else: ['if', 'unless', 'case', 'for'],
+  elsif: ['if', 'unless'],
+  when: ['case'],
+};
+
+/** `true` quando `middle` é uma tag do meio válida para o bloco `block`. */
+export function ownsMiddle(block: string, middle: string): boolean {
+  return MIDDLE_OWNERS[middle]?.includes(block) ?? false;
+}
+
+/**
  * Tags conhecidas que deliberadamente não mexem na indentação.
  * `raw`/`endraw` entram aqui: 19 dos 27 arquivos do corpus são envoltos em raw
  * inteiro, então contá-los indentaria o arquivo todo um nível à toa.

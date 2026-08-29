@@ -1,4 +1,5 @@
 import { test, describe } from 'node:test';
+import * as fs from 'node:fs';
 import assert from 'node:assert/strict';
 
 import {
@@ -17,6 +18,7 @@ import {
   corpusTest,
   corpusDescribe,
   forEachTemplate,
+  fixture,
 } from './helpers.ts';
 
 const TABS: IndentOptions = { insertSpaces: false, tabSize: 4, attributeIndent: 'oneLevel' };
@@ -239,6 +241,174 @@ describe('formatador — estrutura', () => {
         }
       }
     }
+  });
+});
+
+describe('formatador — a tag de bloco segue o HTML', () => {
+  /** O caso real que motivou a regra, versionado em test/fixtures. */
+  const golden = fs.readFileSync(fixture('indent/facets.template'), 'utf8');
+
+  test('facets.template: o arquivo sem indentação nenhuma volta ao original', () => {
+    const flat = golden
+      .split('\n')
+      .map((l) => l.replace(/^\s+/, ''))
+      .join('\n');
+
+    assert.equal(formatText(flat, SPACES), golden);
+  });
+
+  test('facets.template: já indentado, não gera edit nenhum', () => {
+    assert.equal(computeIndentation(golden, SPACES).length, 0);
+  });
+
+  test('a tag de bloco Liquid segue o HTML em volta', () => {
+    const source = ['<div>', '{% if a %}', '<p></p>', '{% endif %}', '</div>'].join('\n');
+
+    assert.deepEqual(formatText(source, TABS).split('\n'), [
+      '<div>',
+      '\t{% if a %}',
+      '\t\t<p></p>',
+      '\t{% endif %}',
+      '</div>',
+    ]);
+  });
+
+  test('o bloco ancora no menor nível entre antes e depois dele', () => {
+    // As duas direções, que são o miolo da regra. O primeiro bloco só abre
+    // elemento: ancora no nível de antes, senão ficaria à direita do HTML que
+    // veio antes dele. O segundo fecha um elemento aberto fora dele: ancora no
+    // nível de depois, senão ficaria à direita do HTML que ele mesmo fecha.
+    const source = [
+      '<div class="a">',
+      '{% if x %}',
+      '<div class="b">',
+      '{% endif %}',
+      '<span></span>',
+      '{% if y %}',
+      '</div>',
+      '{% endif %}',
+      '</div>',
+    ].join('\n');
+
+    assert.deepEqual(formatText(source, TABS).split('\n'), [
+      '<div class="a">',
+      '\t{% if x %}',
+      '\t\t<div class="b">',
+      '\t{% endif %}',
+      '\t\t\t<span></span>',
+      '\t{% if y %}',
+      '\t\t</div>',
+      '\t{% endif %}',
+      '</div>',
+    ]);
+  });
+
+  test('o filho indenta a partir do nível impresso do pai, não da altura da pilha', () => {
+    // facets.template:16-18: a <div> ganhou um nível por estar dentro do
+    // {% if %}, e o <component> herda esse nível mesmo depois do {% endif %}.
+    const source = ['<ul>', '{% if a %}', '<li>', '{% endif %}', '<b></b>'].join('\n');
+
+    assert.deepEqual(formatText(source, TABS).split('\n'), [
+      '<ul>',
+      '\t{% if a %}',
+      '\t\t<li>',
+      '\t{% endif %}',
+      '\t\t\t<b></b>',
+    ]);
+  });
+
+  test('o fechamento HTML volta ao nível da linha que o abriu, mesmo em outro ramo', () => {
+    // A </div> da linha 22 do facets.template fecha a <div> aberta na linha 7,
+    // dentro do {% else %} do bloco anterior: volta ao nível dela, não ao que a
+    // pilha somava naquele ponto.
+    const source = [
+      '{% if a %}',
+      '<div class="um">',
+      '<div class="dois">',
+      '{% else %}',
+      '<div class="tres">',
+      '{% endif %}',
+      '</div>',
+      '</div>',
+      '</div>',
+    ].join('\n');
+
+    assert.deepEqual(formatText(source, TABS).split('\n'), [
+      '{% if a %}',
+      '\t<div class="um">',
+      '\t\t<div class="dois">',
+      '{% else %}',
+      '\t<div class="tres">',
+      '{% endif %}',
+      '\t</div>',
+      '\t\t</div>',
+      '\t</div>',
+    ]);
+  });
+
+  test('o que cada ramo deixa aberto se soma depois do {% end… %}', () => {
+    // Não dá para saber qual ramo rodou, e contar todos é o que garante um nível
+    // de destino para cada fechamento que aparecer depois do bloco.
+    const source = ['{% if a %}', '<section>', '{% else %}', '<article>', '{% endif %}', '<p></p>'].join('\n');
+
+    assert.deepEqual(
+      formatText(source, TABS).split('\n'),
+      ['{% if a %}', '\t<section>', '{% else %}', '\t<article>', '{% endif %}', '\t\t<p></p>'],
+      'as duas aberturas pendentes contam, mas nenhum ramo herda a do outro',
+    );
+  });
+
+  test('bloco balanceado no nível zero indenta como sempre', () => {
+    const source = ['{% if a %}', '<p>x</p>', '{% else %}', '<p>y</p>', '{% endif %}', '<hr>'].join('\n');
+
+    assert.deepEqual(formatText(source, TABS).split('\n'), [
+      '{% if a %}',
+      '\t<p>x</p>',
+      '{% else %}',
+      '\t<p>y</p>',
+      '{% endif %}',
+      '<hr>',
+    ]);
+  });
+
+  test('{% when %} volta ao {% case %} mesmo com HTML aberto no ramo', () => {
+    const source = ['{% case x %}', '{% when 1 %}', '<div>', '{% when 2 %}', '<span></span>', '{% endcase %}'].join(
+      '\n',
+    );
+
+    assert.deepEqual(formatText(source, TABS).split('\n'), [
+      '{% case x %}',
+      '{% when 1 %}',
+      '\t<div>',
+      '{% when 2 %}',
+      '\t<span></span>',
+      '{% endcase %}',
+    ]);
+  });
+
+  test('bloco Liquid aberto dentro do ramo não sobrevive ao fechamento', () => {
+    // O {% for %} sem {% endfor %} é erro do autor, e o diagnóstico avisa. O que
+    // o formatador não pode fazer é empurrar o resto do arquivo por causa dele.
+    const source = ['{% if a %}', '{% for i in x %}', '<p></p>', '{% endif %}', '<hr>'].join('\n');
+
+    assert.deepEqual(formatText(source, TABS).split('\n'), [
+      '{% if a %}',
+      '\t{% for i in x %}',
+      '\t\t<p></p>',
+      '{% endif %}',
+      '<hr>',
+    ]);
+  });
+
+  test('{% endif %} sem abertura continua sendo ignorado', () => {
+    const source = ['<div>', '{% endif %}', '<p></p>', '</div>'].join('\n');
+
+    assert.deepEqual(formatText(source, TABS).split('\n'), [
+      '<div>',
+      '\t{% endif %}',
+      '\t<p></p>',
+      '</div>',
+    ]);
   });
 });
 
