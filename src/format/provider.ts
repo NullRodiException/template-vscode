@@ -17,6 +17,7 @@ function optionsFor(document: vscode.TextDocument, style: IndentStyle): IndentOp
     insertSpaces: style.insertSpaces,
     tabSize: style.tabSize,
     attributeIndent: config.get<'oneLevel' | 'preserve'>('format.attributeIndent', 'oneLevel'),
+    jsonBlocks: config.get<boolean>('format.jsonBlocks', true),
   };
 }
 

@@ -41,6 +41,16 @@
  * `</span>` sem par (`components/basket.template:119`). Qualquer formatador que
  * reconstrua o documento a partir de uma AST quebra nesses arquivos.
  *
+ * ## Bloco JSON
+ *
+ * Onde `src/core/json.ts` reconhece um bloco JSON — o array solto que
+ * `index.template:1-81` devolve como dado, o corpo de um
+ * `<script type="application/ld+json">` —, `{` e `[` entram na **mesma pilha**
+ * como um frame a mais, em vez de uma pilha própria. É o que faz o JSON dentro
+ * de um `<script>` nascer um nível adiante da tag e um `{% for %}` gerando itens
+ * do array somar nível ao que está dentro dele. As regras de nível são as
+ * mesmas: o fechamento volta ao nível da linha que abriu.
+ *
  * Sem dependência de `vscode`, para poder ser testado com `node --test`.
  */
 
@@ -52,6 +62,7 @@ import {
   VOID_ELEMENTS,
 } from '../core/liquidTags.ts';
 import { scan, regionsByLine, type Region, type RegionKind } from '../core/scanner.ts';
+import { findJsonSpans, type JsonSpan } from '../core/json.ts';
 
 export interface IndentOptions {
   insertSpaces: boolean;
@@ -61,12 +72,18 @@ export interface IndentOptions {
    * atributos seguem nas linhas de baixo.
    */
   attributeIndent: 'oneLevel' | 'preserve';
+  /**
+   * Indentar os blocos JSON — `{` e `[` viram nível, como em qualquer arquivo
+   * `.json`. Desligado, o bloco fica exatamente como está.
+   */
+  jsonBlocks: boolean;
 }
 
 export const DEFAULT_OPTIONS: IndentOptions = {
   insertSpaces: false,
   tabSize: 4,
   attributeIndent: 'oneLevel',
+  jsonBlocks: true,
 };
 
 /** Tab-ou-espaço e o tamanho do passo, sem as opções que vêm da extensão. */
@@ -160,6 +177,21 @@ interface HtmlFrame {
 }
 
 /**
+ * Container JSON aberto — um `{` ou um `[`.
+ *
+ * Entra na mesma pilha dos elementos e dos blocos, e não numa própria, para que
+ * um `{% for %}` gerando itens de array some nível ao que está dentro dele e o
+ * JSON dentro de um `<script type="application/json">` nasça um nível adiante do
+ * `<script>`. `level` é o nível da linha que abriu, como nos demais frames.
+ */
+interface JsonFrame {
+  kind: 'json';
+  /** O fechamento que este container espera: `}` ou `]`. */
+  closer: string;
+  level: number;
+}
+
+/**
  * Bloco Liquid aberto.
  *
  * `carried` guarda o que os ramos já encerrados deixaram aberto em HTML: sai da
@@ -176,15 +208,18 @@ interface BlockFrame {
   tag: string;
   level: number;
   ordinal: number;
-  carried: HtmlFrame[];
+  carried: StructureFrame[];
 }
 
-type Frame = HtmlFrame | BlockFrame;
+/** Frame que um ramo de bloco Liquid pode deixar aberto atrás de si. */
+type StructureFrame = HtmlFrame | JsonFrame;
+
+type Frame = StructureFrame | BlockFrame;
 
 /** O que uma linha faz com a estrutura. */
 type Event =
-  | { type: 'open'; kind: 'html' | 'liquid'; tag: string }
-  | { type: 'close'; kind: 'html' | 'liquid'; tag: string }
+  | { type: 'open'; kind: 'html' | 'liquid' | 'json'; tag: string }
+  | { type: 'close'; kind: 'html' | 'liquid' | 'json'; tag: string }
   | { type: 'middle'; tag: string };
 
 interface PendingTag {
@@ -278,8 +313,20 @@ function emitLiquidEvent(events: Event[], name: string): void {
   // propósito. Assim uma 13ª tag da Linx nunca desbalanceia a pilha.
 }
 
-/** Percorre a linha emitindo eventos de estrutura e atualizando o estado contínuo. */
-function scanLine(line: string, state: LineState): ScanResult {
+/**
+ * Percorre a linha emitindo eventos de estrutura e atualizando o estado contínuo.
+ *
+ * `isJson` responde se a coluna está dentro de um bloco JSON. As colunas de JSON
+ * não são varridas como marcação: ali `{` e `[` são container, `<` é impossível
+ * — a detecção do bloco desistiria dele — e o conteúdo de uma string é opaco,
+ * senão uma chave como `"tpl": "<div>"` abriria um elemento. O Liquid segue
+ * valendo dos dois lados, porque é ele que gera os itens do array.
+ */
+function scanLine(
+  line: string,
+  state: LineState,
+  isJson: (column: number) => boolean = () => false,
+): ScanResult {
   const events: Event[] = [];
   let closedPending = false;
   let closerAtStart = false;
@@ -320,6 +367,25 @@ function scanLine(line: string, state: LineState): ScanResult {
   }
 
   while (i < line.length) {
+    if (isJson(i) && !line.startsWith('{{', i) && !line.startsWith('{%', i)) {
+      const ch = line[i];
+      if (ch === '"') {
+        i++;
+        while (i < line.length && line[i] !== '"') {
+          i += line[i] === '\\' ? 2 : 1;
+        }
+        i++;
+        continue;
+      }
+      if (ch === '{' || ch === '[') {
+        events.push({ type: 'open', kind: 'json', tag: ch });
+      } else if (ch === '}' || ch === ']') {
+        events.push({ type: 'close', kind: 'json', tag: ch });
+      }
+      i++;
+      continue;
+    }
+
     if (line.startsWith('{{', i)) {
       i += 2;
       if (!skipInterpolation('}}')) {
@@ -431,6 +497,24 @@ function findHtmlFrame(frames: Frame[], tag: string): number {
   return -1;
 }
 
+/**
+ * Índice do container JSON que este fechamento encerra, ou `-1`.
+ *
+ * O bloco só virou JSON porque parseia inteiro, do primeiro `{`/`[` até o par
+ * dele, então o container procurado é sempre o mais recente. O que pode estar no
+ * caminho é um bloco Liquid aberto dentro dele — um `{% for %}` gerando itens do
+ * array —, e esse não conta.
+ */
+function findJsonFrame(frames: Frame[], closer: string): number {
+  for (let i = frames.length - 1; i >= 0; i--) {
+    const frame = frames[i];
+    if (frame.kind === 'json') {
+      return frame.closer === closer ? i : -1;
+    }
+  }
+  return -1;
+}
+
 /** Índice do bloco Liquid procurado, ou `-1`. Tolera até três blocos que não casam. */
 function findBlockFrame(frames: Frame[], matches: (frame: BlockFrame) => boolean): number {
   let crossed = 0;
@@ -496,13 +580,18 @@ function lineLevelOf(pass: PassState, events: Event[]): number {
     return index === -1 ? level : pass.frames[index].level;
   }
 
+  if (first.kind === 'json') {
+    const index = findJsonFrame(pass.frames, first.tag);
+    return index === -1 ? level : pass.frames[index].level;
+  }
+
   const index = findHtmlFrame(pass.frames, first.tag);
   return index === -1 ? level : pass.frames[index].level;
 }
 
-/** Os frames HTML de uma fatia da pilha, na ordem. */
-function htmlOnly(frames: Frame[]): HtmlFrame[] {
-  return frames.filter((frame): frame is HtmlFrame => frame.kind === 'html');
+/** Os frames de estrutura — elemento HTML e container JSON — de uma fatia da pilha. */
+function structureOnly(frames: Frame[]): StructureFrame[] {
+  return frames.filter((frame): frame is StructureFrame => frame.kind !== 'liquid');
 }
 
 /**
@@ -525,6 +614,8 @@ function applyEvents(pass: PassState, events: Event[], openLevel: number): void 
           carried: [],
         });
         pass.opened++;
+      } else if (event.kind === 'json') {
+        frames.push({ kind: 'json', closer: event.tag === '{' ? '}' : ']', level: openLevel });
       } else {
         frames.push({ kind: 'html', tag: event.tag, level: openLevel });
       }
@@ -539,7 +630,18 @@ function applyEvents(pass: PassState, events: Event[], openLevel: number): void 
       const block = frames[index] as BlockFrame;
       // Bloco Liquid aberto dentro do ramo e nunca fechado morre aqui: mantê-lo
       // empilhado empurraria o resto do arquivo.
-      block.carried.push(...htmlOnly(frames.splice(index + 1)));
+      block.carried.push(...structureOnly(frames.splice(index + 1)));
+      continue;
+    }
+
+    if (event.kind === 'json') {
+      const index = findJsonFrame(frames, event.tag);
+      if (index === -1) {
+        continue;
+      }
+      // O que sobrou aberto dentro do container vai junto — é o mesmo
+      // tratamento do fechamento HTML, e num bloco que parseou não sobra nada.
+      frames.splice(index);
       continue;
     }
 
@@ -550,7 +652,7 @@ function applyEvents(pass: PassState, events: Event[], openLevel: number): void 
         continue;
       }
       const block = frames[index] as BlockFrame;
-      const opened = htmlOnly(frames.splice(index + 1));
+      const opened = structureOnly(frames.splice(index + 1));
       frames.splice(index, 1);
       // Os ramos anteriores primeiro: é a ordem em que os fechamentos de depois
       // do bloco os encontram (`index.template:25` fecha o do último ramo).
@@ -607,9 +709,62 @@ interface PassState {
   observed: Map<number, number>;
 }
 
+/** Trecho de uma linha que está dentro de um bloco JSON, em colunas. */
+interface JsonColumns {
+  from: number;
+  to: number;
+}
+
+/**
+ * Traduz os spans de JSON, que são offsets no documento, para colunas por linha.
+ *
+ * Por linha, e não por região, porque um bloco pode começar no meio de uma —
+ * `<script type="application/json">{` abre o JSON na mesma linha da tag — e a
+ * parte de antes continua sendo marcação.
+ */
+function jsonColumnsByLine(text: string, spans: JsonSpan[]): JsonColumns[][] {
+  const starts = [0];
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] === '\n') {
+      starts.push(i + 1);
+    }
+  }
+  const out: JsonColumns[][] = starts.map(() => []);
+  if (spans.length === 0) {
+    return out;
+  }
+
+  const lineOf = (offset: number): number => {
+    let lo = 0;
+    let hi = starts.length - 1;
+    while (lo < hi) {
+      const mid = (lo + hi + 1) >> 1;
+      if (starts[mid] <= offset) {
+        lo = mid;
+      } else {
+        hi = mid - 1;
+      }
+    }
+    return lo;
+  };
+
+  for (const span of spans) {
+    const first = lineOf(span.start);
+    const last = lineOf(span.end - 1);
+    for (let ln = first; ln <= last; ln++) {
+      out[ln].push({
+        from: ln === first ? span.start - starts[ln] : 0,
+        to: ln === last ? span.end - starts[ln] : Number.POSITIVE_INFINITY,
+      });
+    }
+  }
+  return out;
+}
+
 function runPass(
   lines: string[],
   kinds: RegionKind[],
+  jsonColumns: JsonColumns[][],
   options: IndentOptions,
   after: ReadonlyMap<number, number>,
 ): { edits: IndentEdit[]; observed: Map<number, number> } {
@@ -621,10 +776,13 @@ function runPass(
     const line = lines[ln].replace(/\r$/, '');
     const firstNonWs = line.search(/\S/);
     const kind = kinds[ln];
+    const columns = jsonColumns[ln];
+    const inJson = (column: number): boolean =>
+      columns.some((range) => column >= range.from && column < range.to);
 
     if (firstNonWs === -1) {
       // Linha em branco: a indentação residual some.
-      if (line.length > 0 && !OPAQUE.has(kind)) {
+      if (line.length > 0 && (!OPAQUE.has(kind) || columns.length > 0)) {
         edits.push({ line: ln, newIndent: '', oldIndentLength: line.length });
       }
       continue;
@@ -633,15 +791,17 @@ function runPass(
     // Corpo de <script>, <style>, {% comment %} e o interior de comentários HTML
     // multi-linha ficam exatamente como estão. PageHeader.template:99-242 não é
     // JavaScript parseável — há {% for %} gerando arrays JSON ali dentro —, então
-    // nenhum formatador pode reorganizar aquilo.
-    if (OPAQUE.has(kind)) {
+    // nenhum formatador pode reorganizar aquilo. A exceção é o bloco JSON: ali o
+    // conteúdo tem estrutura própria e reconhecida, e é o único caso em que uma
+    // linha de <script> é reindentada.
+    if (OPAQUE.has(kind) && !inJson(firstNonWs)) {
       continue;
     }
 
     const wasInInterpolation = state.inInterpolation;
     const pendingBefore = state.pending;
 
-    const { events, closedPending, closerAtStart } = scanLine(line, state);
+    const { events, closedPending, closerAtStart } = scanLine(line, state, inJson);
 
     let lineLevel: number;
     if (wasInInterpolation) {
@@ -720,12 +880,16 @@ export function computeIndentation(
 ): IndentEdit[] {
   const lines = text.split('\n');
   const kinds = regionsByLine(text, regions);
+  const jsonColumns = jsonColumnsByLine(
+    text,
+    options.jsonBlocks ? findJsonSpans(text, regions) : [],
+  );
 
   let after: ReadonlyMap<number, number> = new Map();
-  let pass = runPass(lines, kinds, options, after);
+  let pass = runPass(lines, kinds, jsonColumns, options, after);
   for (let i = 0; i < 3 && !sameLevels(after, pass.observed); i++) {
     after = pass.observed;
-    pass = runPass(lines, kinds, options, after);
+    pass = runPass(lines, kinds, jsonColumns, options, after);
   }
   return pass.edits;
 }

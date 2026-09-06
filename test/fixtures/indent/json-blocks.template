@@ -1,0 +1,32 @@
+[
+  {
+    "Name": "FOR BOYS",
+    "Url": "for-boys",
+    "Child": []
+  },
+  {
+    "Name": "ALFAIATARIA",
+    "Child": [
+      { "Name": "BLAZERS", "Url": "alfaiataria/blazers" }
+    ]
+  }
+]
+
+{% if Request.IsMobileDevice %}
+  <div class="menu">
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "itemListElement": [
+          {% for item in Menu %}
+            {
+              "@type": "ListItem",
+              "position": {{ forloop.index }},
+              "name": "{{ item.Name }}"
+            }{% unless forloop.last %},{% endunless %}
+          {% endfor %}
+        ]
+      }
+    </script>
+  </div>
+{% endif %}

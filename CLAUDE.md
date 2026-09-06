@@ -50,7 +50,7 @@ Regra estrutural, não estética: é o que permite testar tudo com `node --test`
 
 | Pasta | Conteúdo |
 |---|---|
-| `src/core/` | scanner, blocos, tags HTML, tabelas do dialeto e do HTML, resolução de caminhos, símbolos, dobra, comentário, diagnósticos — puro |
+| `src/core/` | scanner, blocos, tags HTML, blocos JSON, tabelas do dialeto e do HTML, resolução de caminhos, símbolos, dobra, comentário, diagnósticos — puro |
 | `src/format/` | indentador puro + providers de formatação e dobra |
 | `src/navigation/` | quick pick, links, definição, símbolos, toggle template↔js, copiar include |
 | `syntaxes/` | gramática principal + 3 injeções (raw-escape, liquid, vue-directive) |
@@ -58,6 +58,8 @@ Regra estrutural, não estética: é o que permite testar tudo com `node --test`
 ### O formatador só mexe na indentação
 
 [src/format/indenter.ts](src/format/indenter.ts) produz no máximo um edit por linha, restrito ao trecho antes do primeiro caractere não-branco. Não é excesso de zelo: a árvore HTML destes arquivos **não é balanceada** (`{% if %}` gera atributos dentro de tag aberta, ramos de `{% if %}/{% else %}` abrem elementos diferentes, há `</span>` órfão). Qualquer abordagem que reconstrua o documento a partir de uma AST quebra. O mesmo emparelhamento tolerante vale na dobra de elementos HTML: fechamento órfão é ignorado, abertura sem par não dobra.
+
+Bloco JSON é a única estrutura de outra linguagem que o indentador entende: [src/core/json.ts](src/core/json.ts) reconhece o array solto que um template devolve como dado (`index.template:1-81`) e o corpo de `<script type="application/(ld+)?json">`, e `{`/`[` viram frames na **mesma pilha** dos elementos e dos blocos. A detecção parseia o trecho inteiro e desiste ao primeiro token que não seja de JSON nem Liquid — é o que impede um `{` perdido no meio de marcação de arrastar o arquivo, e o que preserva verbatim o `<script>` sem `type` (JavaScript com JSON gerado por `{% for %}`). Aqui também não há reflow: só a indentação muda.
 
 ### Dois esquemas de caminho
 

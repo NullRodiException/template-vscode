@@ -344,6 +344,7 @@ describe('manifesto', () => {
       'linxLiquid.diagnostics.enabled',
       'linxLiquid.format.onSave',
       'linxLiquid.format.attributeIndent',
+      'linxLiquid.format.jsonBlocks',
       'linxLiquid.autoClosingTags',
     ]) {
       assert.ok(declared.includes(key), `${key} precisa aparecer nas configurações da extensão`);

@@ -21,8 +21,9 @@ import {
   fixture,
 } from './helpers.ts';
 
-const TABS: IndentOptions = { insertSpaces: false, tabSize: 4, attributeIndent: 'oneLevel' };
-const SPACES: IndentOptions = { insertSpaces: true, tabSize: 2, attributeIndent: 'oneLevel' };
+const BASE = { attributeIndent: 'oneLevel', jsonBlocks: true } as const;
+const TABS: IndentOptions = { insertSpaces: false, tabSize: 4, ...BASE };
+const SPACES: IndentOptions = { insertSpaces: true, tabSize: 2, ...BASE };
 
 /** Conteúdo de cada linha sem a indentação — o que o formatador jamais pode alterar. */
 function skeleton(text: string): string[] {
@@ -409,6 +410,91 @@ describe('formatador — a tag de bloco segue o HTML', () => {
       '\t<p></p>',
       '</div>',
     ]);
+  });
+});
+
+describe('formatador — blocos JSON', () => {
+  /** JSON solto no topo do arquivo e dentro de `<script>`, versionado em test/fixtures. */
+  const golden = fs.readFileSync(fixture('indent/json-blocks.template'), 'utf8');
+  const flat = golden
+    .split('\n')
+    .map((l) => l.replace(/^\s+/, ''))
+    .join('\n');
+
+  test('json-blocks.template: o arquivo sem indentação nenhuma volta ao original', () => {
+    assert.equal(formatText(flat, SPACES), golden);
+  });
+
+  test('json-blocks.template: já indentado, não gera edit nenhum', () => {
+    assert.equal(computeIndentation(golden, SPACES).length, 0);
+  });
+
+  test('json-blocks.template: as duas garantias valem também no bloco JSON', () => {
+    // O corpus de `ex/` não vai para o repositório, então as garantias de
+    // não-corrupção e idempotência precisam de um arquivo versionado para
+    // continuarem verificadas na CI.
+    for (const options of [TABS, SPACES]) {
+      const once = formatText(flat, options);
+      assert.deepEqual(skeleton(once), skeleton(flat));
+      assert.equal(formatText(once, options), once);
+    }
+  });
+
+  test('objeto e array somam nível, e o fechamento volta ao da abertura', () => {
+    const source = ['{', '"a": [', '1', '],', '"b": {', '"c": 2', '}', '}'].join('\n');
+
+    assert.deepEqual(formatText(source, TABS).split('\n'), [
+      '{',
+      '\t"a": [',
+      '\t\t1',
+      '\t],',
+      '\t"b": {',
+      '\t\t"c": 2',
+      '\t}',
+      '}',
+    ]);
+  });
+
+  test('o bloco dentro de um elemento nasce no nível dele', () => {
+    const source = ['<div>', '{', '"a": 1', '}', '</div>'].join('\n');
+
+    assert.deepEqual(formatText(source, TABS).split('\n'), [
+      '<div>',
+      '\t{',
+      '\t\t"a": 1',
+      '\t}',
+      '</div>',
+    ]);
+  });
+
+  test('o bloco Liquid dentro do JSON indenta os itens que ele gera', () => {
+    const source = ['[', '{% for p in Products %}', '{{ p.Id }},', '{% endfor %}', ']'].join('\n');
+
+    assert.deepEqual(formatText(source, TABS).split('\n'), [
+      '[',
+      '\t{% for p in Products %}',
+      '\t\t{{ p.Id }},',
+      '\t{% endfor %}',
+      ']',
+    ]);
+  });
+
+  test('o corpo de <script> que não é JSON continua verbatim', () => {
+    const source = ['<script>', 'var x = {', 'a: 1', '};', '</script>'].join('\n');
+
+    assert.equal(computeIndentation(source, TABS).length, 0);
+  });
+
+  test('o que não parseia como JSON continua sendo marcação', () => {
+    const source = ['{', '<div>', '</div>', '}'].join('\n');
+
+    assert.deepEqual(formatText(source, TABS).split('\n'), ['{', '<div>', '</div>', '}']);
+  });
+
+  test('jsonBlocks desligado deixa o bloco exatamente como está', () => {
+    const source = ['[', '{', '"a": 1', '}', ']'].join('\n');
+
+    assert.equal(computeIndentation(source, { ...TABS, jsonBlocks: false }).length, 0);
   });
 });
 

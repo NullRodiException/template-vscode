@@ -2,7 +2,7 @@
   "name": "linx-liquid-template",
   "displayName": "Linx Liquid Template",
   "description": "Suporte a arquivos .template do Liquid da Linx Commerce: highlight, indentação, comentar bloco, navegação e diagnósticos.",
-  "version": "0.8.3",
+  "version": "0.9.0",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -178,6 +178,11 @@
           ],
           "default": "oneLevel",
           "markdownDescription": "Como indentar linhas de continuação de atributos (uma tag `<input` cujos atributos seguem nas linhas abaixo). `oneLevel` recua um nível; `preserve` mantém a indentação original dessas linhas."
+        },
+        "linxLiquid.format.jsonBlocks": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Indenta os blocos JSON como JSON: o array solto que o template devolve como dado e o corpo de `<script type=\"application/json\">` ou `application/ld+json`. Um bloco só conta como JSON quando parseia inteiro; `{% for %}` e `{{ }}` gerando o conteúdo são aceitos. Desligado, o bloco fica como está."
         },
         "linxLiquid.autoClosingTags": {
           "type": "boolean",

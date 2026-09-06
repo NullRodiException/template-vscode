@@ -34,6 +34,8 @@ A restrição não é excesso de zelo: a árvore HTML destes arquivos não é ba
 
 Ficam intocados: o corpo de `<script>` e `<style>`, mustaches do Vue quebrados em várias linhas, e o interior de comentários.
 
+**Bloco JSON indenta como JSON.** O array solto que um template devolve como dado — um menu de 80 linhas incluído por outra página — e o corpo de `<script type="application/json">` ou `application/ld+json` passam a ter `{` e `[` somando nível, com o fechamento voltando ao nível da abertura. Antes não havia ali elemento HTML nem bloco Liquid nenhum, e o arquivo inteiro ficava encostado na margem. O `{% for %}` que gera os itens do array e o `{{ }}` no lugar de um valor continuam valendo e somam nível como qualquer bloco. A detecção é conservadora: o trecho só é JSON se parseia inteiro, do `{`/`[` até o par dele, e qualquer coisa que não seja token de JSON ou Liquid — um `<`, um `;`, uma palavra solta — o devolve para o tratamento de marcação. É o que mantém intocado o `<script>` sem `type`, que é JavaScript com JSON gerado por Liquid no meio. Desliga em `linxLiquid.format.jsonBlocks`.
+
 **Salvar formata.** Não é preciso configurar nada: a extensão indenta o arquivo no save, em qualquer máquina, e `linxLiquid.format.onSave` desliga. Quem já tem `editor.formatOnSave` ligado para a linguagem continua com o formatador do editor — a extensão sai de cena em vez de aplicar tudo duas vezes.
 
 Fechar uma estrutura também formata na hora: digitar o `>` de `</div>` ou o `}` de `{% endif %}` traz a linha de volta ao nível da abertura, sem esperar o save. O `indentationRules` só age no Enter, quando o fechamento ainda não foi escrito, então até aqui a linha nascia um nível adentro e ficava.
@@ -123,6 +125,7 @@ Quem decide se ele aparece é o tema de ícones ativo: o VS Code só gera a regr
 | `linxLiquid.diagnostics.enabled` | `true` | Liga/desliga os diagnósticos |
 | `linxLiquid.format.onSave` | `true` | Indenta ao salvar. Independe de `editor.formatOnSave` |
 | `linxLiquid.format.attributeIndent` | `oneLevel` | `preserve` mantém as linhas de continuação de atributo como estão |
+| `linxLiquid.format.jsonBlocks` | `true` | Indenta os blocos JSON como JSON. Desligado, o bloco fica como está |
 | `linxLiquid.autoClosingTags` | `true` | Digitar `>` escreve a tag de fechamento |
 
 Formatar ao salvar vem **ligado**, por conta da própria extensão. **Linx: Configurar workspace** continua útil para dois casos: passar a formatação para o pipeline do editor (`editor.formatOnSave` + `editor.defaultFormatter` no `.vscode/settings.json`), e destravar a formatação enquanto se digita para quem tem um `editor.formatOnType` próprio nas configurações do usuário — o padrão do manifesto não vence uma configuração explícita.
@@ -159,9 +162,9 @@ As garantias mais importantes:
 
 ```
 src/core/       scanner de regiões, emparelhamento de blocos, varredura de tags
-                HTML, tabela do dialeto, tabela do HTML, resolução de caminhos,
-                símbolos, dobra, comentário e diagnósticos — tudo puro, sem
-                importar 'vscode'
+                HTML, detecção de bloco JSON, tabela do dialeto, tabela do HTML,
+                resolução de caminhos, símbolos, dobra, comentário e
+                diagnósticos — tudo puro, sem importar 'vscode'
 src/format/     indentador (puro) + providers de formatação e dobra
 src/navigation/ quick pick, links, definição, símbolos, toggle template↔js,
                 copiar include
