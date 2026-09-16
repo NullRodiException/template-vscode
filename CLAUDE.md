@@ -53,7 +53,7 @@ Regra estrutural, não estética: é o que permite testar tudo com `node --test`
 | `src/core/` | scanner, blocos, tags HTML, blocos JSON, tabelas do dialeto e do HTML, resolução de caminhos, símbolos, dobra, comentário, diagnósticos — puro |
 | `src/format/` | indentador puro + providers de formatação e dobra |
 | `src/navigation/` | quick pick, links, definição, símbolos, toggle template↔js, copiar include |
-| `syntaxes/` | gramática principal + 3 injeções (raw-escape, liquid, vue-directive) |
+| `syntaxes/` | gramática principal + 4 injeções (raw-escape, liquid, vue-directive, vue-expression) |
 
 ### O formatador só mexe na indentação
 
@@ -68,7 +68,7 @@ Bloco JSON é a única estrutura de outra linguagem que o indentador entende: [s
 - **fonte** — `{% include /Pages/... %}`, `| themepath`: igual à árvore local, relativo à raiz do tema.
 - **deploy** — `| contentpath`, `template="~/Custom/Content/Widgets/<folder>/..."`: traduzido pelo atributo `folder` do `manifest.xml`.
 
-A raiz do tema é descoberta subindo diretórios até achar uma pasta com `Pages/` ou uma `<site>/html/`. É cacheada, e [extension.ts](src/extension.ts) invalida o cache por `FileSystemWatcher` de `**/manifest.xml` e `**/*.template`.
+A raiz do tema é descoberta subindo diretórios até achar uma pasta com `Pages/` ou uma `<site>/html/`; num clone com vários temas irmãos, onde nenhum dos dois existe, quem decide é o **nome da pasta** (`DEFAULT_THEME_FOLDERS` mais `linxLiquid.themeFolders`) e, por último, `Templates/`/`Components/`/`Configs/` — os dois últimos só dentro do workspace e com o mais externo vencendo, para que o include de um tema não resolva no tema irmão. É cacheada, e [extension.ts](src/extension.ts) invalida o cache por `FileSystemWatcher` de `**/manifest.xml` e `**/*.template`.
 
 ### Tabela do dialeto
 

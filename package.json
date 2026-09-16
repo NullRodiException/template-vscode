@@ -2,7 +2,7 @@
   "name": "linx-liquid-template",
   "displayName": "Linx Liquid Template",
   "description": "Suporte a arquivos .template do Liquid da Linx Commerce: highlight, indentação, comentar bloco, navegação e diagnósticos.",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "publisher": "local",
   "license": "MIT",
   "repository": {
@@ -75,6 +75,13 @@
       {
         "scopeName": "linx-liquid.injection.vue-directive",
         "path": "./syntaxes/vue-directive.injection.json",
+        "injectTo": [
+          "text.html.linx-liquid"
+        ]
+      },
+      {
+        "scopeName": "linx-liquid.injection.vue-expression",
+        "path": "./syntaxes/vue-expression.injection.json",
         "injectTo": [
           "text.html.linx-liquid"
         ]
@@ -153,7 +160,16 @@
         "linxLiquid.themeRoot": {
           "type": "string",
           "default": "",
-          "markdownDescription": "Caminho da raiz do tema, usado para resolver `{% include /Pages/... %}`. Relativo à pasta do workspace ou absoluto. Vazio = detectar automaticamente subindo os diretórios até achar uma pasta que contenha `Pages/`, a pasta `html/` do site ou — só quando não houver nenhum dos dois — uma pasta de tema com `Templates/`, `Components/` ou `Configs/`."
+          "markdownDescription": "Caminho da raiz do tema, usado para resolver `{% include /Pages/... %}`. Relativo à pasta do workspace ou absoluto. Vazio = detectar automaticamente subindo os diretórios até achar uma pasta que contenha `Pages/`, a pasta `html/` do site ou — só quando não houver nenhum dos dois — uma pasta com nome de tema (`linxLiquid.themeFolders`) ou com `Templates/`, `Components/` ou `Configs/`. Num repositório com vários temas, um valor fixo aqui aponta todos os arquivos para o mesmo tema: nesse caso use `linxLiquid.themeFolders`."
+        },
+        "linxLiquid.themeFolders": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "markdownDescription": "Nomes de pasta que identificam a raiz de um tema, **somados** aos que já valem por padrão: `html`, `Base`, `Default`, `Mobile`, `Moda`, `POS`, `Shared` e `agrada-template`. Num repositório com vários temas lado a lado é o nome da pasta que diz de qual tema o arquivo é, e é por ele que `{% include /Templates/... %}` de um arquivo de `Moda/` aponta para `Moda/`. Use para os temas com nome próprio — `agrada-template-clean`, um tema de cliente. Aceita `*`: `agrada-template*` cobre a família inteira. Só vale dentro das pastas do workspace, e a correspondência ignora maiúsculas e minúsculas.",
+          "scope": "resource"
         },
         "linxLiquid.sharedThemeRoot": {
           "type": "string",

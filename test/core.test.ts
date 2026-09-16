@@ -32,6 +32,7 @@ import {
   findThemeRoot,
   getThemeInfo,
   toIncludePath,
+  DEFAULT_THEME_FOLDERS,
 } from '../src/core/theme.ts';
 import {
   read,
@@ -324,6 +325,64 @@ describe('repositório de temas: raiz sem Pages/ e sem html/', () => {
       resolveIncludePath('includes/PageHeader.template', master, undefined, [workspace]),
       fixture('theme-repo/Base/Templates/masters/includes/PageHeader.template'),
     );
+  });
+});
+
+describe('raiz de tema pelo nome da pasta', () => {
+  // No mesmo clone convivem `Base/`, `Moda/` e um tema com nome de cliente. O
+  // nome é o que diz de qual tema o arquivo é: sem ele, `Moda/` e
+  // `agrada-template-clean/` não têm marcador nenhum — nem `Pages/`, nem
+  // `html/`, nem `Templates/` — e o include de um não teria como achar o outro.
+  const workspace = fixture('theme-repo');
+  const moda = fixture('theme-repo/Moda');
+  const clean = fixture('theme-repo/agrada-template-clean');
+  const produto = fixture('theme-repo/Moda/Paginas/produto.template');
+  const home = fixture('theme-repo/agrada-template-clean/Paginas/home.template');
+  const aviso = fixture('theme-repo/agrada-template-clean/Shared/aviso.template');
+  const comClean = [...DEFAULT_THEME_FOLDERS, 'agrada-template-clean'];
+
+  test('um nome padrão da Linx identifica a raiz sem nenhum outro sinal', () => {
+    assert.equal(findThemeRoot(produto, undefined, [workspace]), moda);
+  });
+
+  test('o include de um tema aponta para o arquivo do próprio tema', () => {
+    assert.equal(
+      resolveIncludePath('/includes/cabecalho', produto, undefined, [workspace]),
+      fixture('theme-repo/Moda/includes/cabecalho.template'),
+    );
+    assert.equal(
+      resolveIncludePath('/includes/cabecalho', home, undefined, [workspace], comClean),
+      fixture('theme-repo/agrada-template-clean/includes/cabecalho.template'),
+    );
+  });
+
+  test('o nome de cliente só vale depois de configurado', () => {
+    assert.equal(findThemeRoot(home, undefined, [workspace]), undefined);
+    assert.equal(findThemeRoot(home, undefined, [workspace], comClean), clean);
+  });
+
+  test('o `*` cobre a família de temas com sufixo', () => {
+    const comCuringa = [...DEFAULT_THEME_FOLDERS, 'agrada-template*'];
+    assert.equal(findThemeRoot(home, undefined, [workspace], comCuringa), clean);
+  });
+
+  test('vence o nome mais externo', () => {
+    // `agrada-template-clean/Shared/` casa com um nome padrão. Parar nela faria
+    // o include contar da subpasta, e o arquivo do tema não seria achado.
+    assert.equal(findThemeRoot(aviso, undefined, [workspace], comClean), clean);
+    assert.equal(
+      resolveIncludePath('/includes/cabecalho', aviso, undefined, [workspace], comClean),
+      fixture('theme-repo/agrada-template-clean/includes/cabecalho.template'),
+    );
+  });
+
+  test('sem pasta de workspace o nome não vale', () => {
+    // Acima da pasta aberta, uma `Moda/` é coincidência do disco de quem edita.
+    assert.equal(findThemeRoot(produto), undefined);
+  });
+
+  test('a configuração themeRoot continua tendo a última palavra', () => {
+    assert.equal(findThemeRoot(produto, workspace, [workspace]), workspace);
   });
 });
 

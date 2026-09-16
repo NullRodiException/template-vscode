@@ -30,6 +30,7 @@ const OWN_GRAMMARS: Record<string, string> = {
   'linx-liquid.injection.raw-escape': 'syntaxes/raw-escape.injection.json',
   'linx-liquid.injection.liquid': 'syntaxes/liquid.injection.json',
   'linx-liquid.injection.vue-directive': 'syntaxes/vue-directive.injection.json',
+  'linx-liquid.injection.vue-expression': 'syntaxes/vue-expression.injection.json',
 };
 
 let grammar: IGrammar | null;
@@ -66,6 +67,7 @@ before(async () => {
             'linx-liquid.injection.raw-escape',
             'linx-liquid.injection.liquid',
             'linx-liquid.injection.vue-directive',
+            'linx-liquid.injection.vue-expression',
           ]
         : undefined,
   });
@@ -286,6 +288,88 @@ describe('gramática — diretivas do Vue', () => {
       hasScope(html.scopes(1, 'class'), 'entity.other.attribute-name.html'),
       'o atributo seguinte continua sendo atributo HTML comum',
     );
+  });
+});
+
+describe('gramática — o que não pode sequestrar o resto do arquivo', () => {
+  /**
+   * Fonte inline e gramática HTML de verdade: o sintoma destes casos é o resto
+   * do documento perder a cor, e provar isso exige que as linhas seguintes
+   * sejam tokenizadas pelo `text.html.basic`, não pelo fallback.
+   */
+  function inspectSource(t: TestContext, source: string): ReturnType<typeof inspectText> | undefined {
+    if (!hasBuiltins) {
+      t.skip('sem VS Code instalado, text.html.basic não carrega e o teste não é fiel');
+      return undefined;
+    }
+    return inspectText(source);
+  }
+
+  test('{{\'{%\'}} — o delimitador dentro de string do Liquid é texto', (t) => {
+    // Layout/Footer/index.template:2 — é assim que o template escreve um
+    // `{% include %}` literal, para outro `{% capture %}` executar depois.
+    const doc = inspectSource(
+      t,
+      "{% capture dynamic_include %}\n{{'{%'}} include /Layout/Footer/JSON/paginas.json {{'%}'}}\n{% endcapture %}\n<div class=\"rodape\">fim</div>",
+    );
+    if (!doc) {
+      return;
+    }
+    const abre = doc.scopes(2, '{%');
+    assert.ok(hasScope(abre, 'string.quoted.single.liquid'), 'o {% da string é conteúdo da string');
+    assert.ok(
+      !hasScope(abre, 'punctuation.definition.tag.begin.liquid'),
+      'não pode abrir tag: a injeção do Liquid fica fora das strings do próprio Liquid',
+    );
+    assert.ok(
+      hasScope(doc.scopes(4, 'div'), 'entity.name.tag.html'),
+      'a linha seguinte continua sendo HTML — era ela que perdia a cor',
+    );
+  });
+
+  test('a comparação do Vue não abre tag JSX', (t) => {
+    // `<b` num lugar onde o JavaScript espera expressão abre JSX no source.js,
+    // e daí em diante o arquivo inteiro era tokenizado como JSX.
+    const doc = inspectSource(
+      t,
+      '<div v-if="!(qtd<10)" :class="{ ok: (a<b) }"></div>\n<p class="depois">texto</p>',
+    );
+    if (!doc) {
+      return;
+    }
+    assert.ok(
+      hasScope(doc.scopes(1, '<10'), 'keyword.operator.relational'),
+      'o < é operador, não início de tag',
+    );
+    assert.ok(!doc.lineHas(1, 'meta.tag.js'), 'nada de JSX');
+    assert.ok(
+      hasScope(doc.scopes(2, 'class'), 'entity.other.attribute-name.html'),
+      'a linha seguinte continua sendo HTML',
+    );
+  });
+
+  test('`if` no valor da diretiva não engole a aspa que fecha o atributo', (t) => {
+    // A regra de comando do source.js abre um bloco que não fecha dentro do
+    // valor; a aspa final virava início de string do JavaScript.
+    const doc = inspectSource(t, '<div @click="if (a) go()"></div>\n<p class="depois">texto</p>');
+    if (!doc) {
+      return;
+    }
+    assert.ok(hasScope(doc.scopes(1, 'if'), 'keyword.control'));
+    assert.ok(
+      hasScope(doc.scopes(2, 'class'), 'entity.other.attribute-name.html'),
+      'a linha seguinte continua sendo HTML',
+    );
+  });
+
+  test('a string do JavaScript com HTML dentro continua string', (t) => {
+    // O contraponto do teste acima: `'<b>'` é texto, e a regra do < não pode
+    // alcançar dentro da string.
+    const doc = inspectSource(t, `<div v-html="'<b>' + x"></div>`);
+    if (!doc) {
+      return;
+    }
+    assert.ok(hasScope(doc.scopes(1, '<b>'), 'string.quoted.single.js'));
   });
 });
 

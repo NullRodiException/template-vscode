@@ -146,7 +146,19 @@ export function activate(context: vscode.ExtensionContext): void {
   templateWatcher.onDidDelete(onTemplateTreeChanged);
   templateWatcher.onDidChange(clearWidgetIndex);
 
-  context.subscriptions.push(manifestWatcher, templateWatcher);
+  // `themeRoot` e `themeFolders` mudam a raiz do tema de cada arquivo, e com
+  // ela o destino de todo include. Quem acabou de acrescentar o nome do tema
+  // nas configurações fez isso justamente por causa dos avisos de include
+  // inexistente que estão na tela; sem isto eles só sairiam depois de alguém
+  // digitar em cada arquivo.
+  const configWatcher = vscode.workspace.onDidChangeConfiguration((event) => {
+    if (event.affectsConfiguration('linxLiquid')) {
+      clearThemeCache();
+      refreshDiagnostics();
+    }
+  });
+
+  context.subscriptions.push(manifestWatcher, templateWatcher, configWatcher);
 }
 
 export function deactivate(): void {

@@ -1,0 +1,2 @@
+{% include /includes/cabecalho %}
+<h1 class="produto">Moda</h1>

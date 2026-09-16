@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 
 import { findThemeRoot, toIncludePath } from '../core/theme.ts';
-import { themeRootFor, workspaceRootsFor } from '../config.ts';
+import { themeRootFor, workspaceRootsFor, themeFoldersFor } from '../config.ts';
 
 /**
  * Raiz de onde o caminho do include conta.
@@ -14,7 +14,7 @@ import { themeRootFor, workspaceRootsFor } from '../config.ts';
  */
 function includeRoot(uri: vscode.Uri): string | undefined {
   return (
-    findThemeRoot(uri.fsPath, themeRootFor(uri), workspaceRootsFor(uri)) ??
+    findThemeRoot(uri.fsPath, themeRootFor(uri), workspaceRootsFor(uri), themeFoldersFor(uri)) ??
     vscode.workspace.getWorkspaceFolder(uri)?.uri.fsPath
   );
 }

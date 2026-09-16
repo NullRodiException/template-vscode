@@ -1,0 +1,38 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Linx Liquid — comparação dentro de expressão do Vue",
+  "scopeName": "linx-liquid.injection.vue-expression",
+  "injectionSelector": "L:text.html.linx-liquid meta.embedded.expression.vue -string -comment -meta.embedded.expression.liquid -meta.tag.liquid",
+  "comment": [
+    "O valor de uma diretiva e o conteúdo de um mustache são tokenizados pelo source.js, que é o",
+    "mesmo grammar do JSX: um `<` seguido de identificador onde o JavaScript espera expressão abre",
+    "uma tag JSX. Em `@click=\"if (a<b) go()\"` o `<b` vira tag, as aspas que fechavam o atributo viram",
+    "string de atributo do JSX, e daí em diante o arquivo inteiro é tokenizado como JSX — o HTML",
+    "perde a cor a partir da linha. Não existe variante do source.js sem JSX, então o jeito é casar",
+    "o `<` antes dele.",
+    "É injeção, e não mais um pattern do #vue-mustache e da diretiva, porque o `<` problemático",
+    "aparece em qualquer profundidade — dentro do `if (...)`, de um objeto de :class, de uma chamada —",
+    "e um pattern irmão do include do source.js só é consultado no nível de cima. O seletor exclui",
+    "string e comentário para não tocar no `<` de `v-html=\"'<b>'\"`, que é texto."
+  ],
+  "patterns": [{ "include": "#relational" }, { "include": "#statement-keyword" }],
+  "repository": {
+    "relational": {
+      "comment": "Cobre <, <=, << e <<=. O > não precisa: sozinho ele nunca abre JSX.",
+      "match": "<<?=?",
+      "name": "keyword.operator.relational.js"
+    },
+
+    "statement-keyword": {
+      "comment": [
+        "Mesmo estrago, outra origem: em `@click=\"if (a) go()\"` a regra de comando do source.js abre",
+        "um bloco que só fecharia com o corpo do `if`, e a aspa que fecha o atributo é engolida como",
+        "início de string do JavaScript — o resto do arquivo vira valor de atributo. Casar a palavra",
+        "aqui impede a regra de comando de abrir; o que sobra é lido como expressão, que é o que o",
+        "Vue aceita nesse lugar de qualquer forma."
+      ],
+      "match": "(?<![.$\\w])(?:if|else|for|while|do|switch|case|try|catch|finally|return)(?![\\w$])",
+      "name": "keyword.control.js"
+    }
+  }
+}

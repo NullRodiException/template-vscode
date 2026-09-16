@@ -120,7 +120,8 @@ Quem decide se ele aparece é o tema de ícones ativo: o VS Code só gera a regr
 
 | Opção | Padrão | Para quê |
 |---|---|---|
-| `linxLiquid.themeRoot` | detecção automática | Raiz do tema (a pasta que contém `Pages/`, a `html/` do site, ou a pasta do tema num repositório de temas). Absoluta ou relativa à pasta do workspace. Só defina se a detecção falhar |
+| `linxLiquid.themeRoot` | detecção automática | Raiz do tema (a pasta que contém `Pages/`, a `html/` do site, ou a pasta do tema num repositório de temas). Absoluta ou relativa à pasta do workspace. Só defina se a detecção falhar — num repositório com vários temas, um valor fixo aponta todos para o mesmo, e o que você quer é `linxLiquid.themeFolders` |
+| `linxLiquid.themeFolders` | vazio | Nomes de pasta que valem como raiz de tema, **somados** aos que já valem (`html`, `Base`, `Default`, `Mobile`, `Moda`, `POS`, `Shared`, `agrada-template`). Para o tema com nome próprio — `agrada-template-clean`, um tema de cliente. Aceita `*` (`agrada-template*`) |
 | `linxLiquid.sharedThemeRoot` | vazio | Raiz do tema compartilhado, para o filtro `\| sharedthemepath` |
 | `linxLiquid.diagnostics.enabled` | `true` | Liga/desliga os diagnósticos |
 | `linxLiquid.format.onSave` | `true` | Indenta ao salvar. Independe de `editor.formatOnSave` |

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 
 import { type PathReference } from '../core/references.ts';
 import { resolveIncludePath, resolveThemePath, resolveDeployPath } from '../core/theme.ts';
-import { themeRootFor, sharedThemeRootFor, workspaceRootsFor } from '../config.ts';
+import { themeRootFor, sharedThemeRootFor, workspaceRootsFor, themeFoldersFor } from '../config.ts';
 
 /**
  * Traduz uma referência para um arquivo no disco.
@@ -22,17 +22,18 @@ export function resolveReference(
   const file = document.uri.fsPath;
   const themeRoot = themeRootFor(document);
   const roots = workspaceRootsFor(document);
+  const folders = themeFoldersFor(document);
 
   switch (reference.kind) {
     case 'include':
-      return resolveIncludePath(reference.path, file, themeRoot, roots);
+      return resolveIncludePath(reference.path, file, themeRoot, roots, folders);
     case 'theme':
-      return resolveThemePath(reference.path, file, themeRoot, roots);
+      return resolveThemePath(reference.path, file, themeRoot, roots, folders);
     case 'deploy':
       return (
-        resolveDeployPath(reference.path, file, themeRoot, roots) ??
+        resolveDeployPath(reference.path, file, themeRoot, roots, folders) ??
         // `template=` às vezes aparece com caminho de fonte.
-        resolveIncludePath(reference.path, file, themeRoot, roots)
+        resolveIncludePath(reference.path, file, themeRoot, roots, folders)
       );
     case 'shared': {
       // Sem a raiz do tema compartilhado configurada não há como resolver; um

@@ -8,6 +8,8 @@
 import * as vscode from 'vscode';
 import * as path from 'node:path';
 
+import { DEFAULT_THEME_FOLDERS } from './core/theme.ts';
+
 /**
  * `true` quando o documento tem um arquivo real por trás.
  *
@@ -60,6 +62,25 @@ function pathSetting(scope: Scope, key: string): string | undefined {
 /** `linxLiquid.themeRoot`, ou `undefined` para detectar automaticamente. */
 export function themeRootFor(scope: Scope): string | undefined {
   return pathSetting(scope, 'themeRoot');
+}
+
+/**
+ * Nomes de pasta que contam como raiz de tema, com o que vier de
+ * `linxLiquid.themeFolders` **somado** aos nomes padrão da Linx.
+ *
+ * É soma, e não substituição, porque o caso real é um repositório que tem os
+ * temas padrão *e mais um* com nome de cliente (`agrada-template-clean`): quem
+ * configura quer acrescentar o seu, não redeclarar os outros seis.
+ */
+export function themeFoldersFor(scope: Scope): string[] {
+  const extra = vscode.workspace
+    .getConfiguration('linxLiquid', uriOf(scope))
+    .get<string[]>('themeFolders', []);
+  const clean = (Array.isArray(extra) ? extra : [])
+    .filter((name): name is string => typeof name === 'string')
+    .map((name) => name.trim())
+    .filter((name) => name !== '');
+  return [...DEFAULT_THEME_FOLDERS, ...clean];
 }
 
 /** `linxLiquid.sharedThemeRoot`, ou `undefined` se não configurado. */

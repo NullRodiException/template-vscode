@@ -340,6 +340,7 @@ describe('manifesto', () => {
     const declared = Object.keys(manifest.contributes.configuration.properties);
     for (const key of [
       'linxLiquid.themeRoot',
+      'linxLiquid.themeFolders',
       'linxLiquid.sharedThemeRoot',
       'linxLiquid.diagnostics.enabled',
       'linxLiquid.format.onSave',

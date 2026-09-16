@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { analyze, type Problem, type Severity } from './core/diagnostics.ts';
 import { findPathReferences } from './core/references.ts';
 import { resolveIncludePath } from './core/theme.ts';
-import { themeRootFor, workspaceRootsFor, isOnDisk } from './config.ts';
+import { themeRootFor, workspaceRootsFor, themeFoldersFor, isOnDisk } from './config.ts';
 import { regionsOf } from './regionCache.ts';
 import { LANGUAGE_ID } from './format/provider.ts';
 
@@ -33,13 +33,14 @@ function checkMissingIncludes(document: vscode.TextDocument): vscode.Diagnostic[
   }
   const themeRoot = themeRootFor(document);
   const roots = workspaceRootsFor(document);
+  const folders = themeFoldersFor(document);
 
   const out: vscode.Diagnostic[] = [];
   for (const reference of findPathReferences(document.getText(), regionsOf(document))) {
     if (reference.kind !== 'include') {
       continue;
     }
-    if (resolveIncludePath(reference.path, document.uri.fsPath, themeRoot, roots)) {
+    if (resolveIncludePath(reference.path, document.uri.fsPath, themeRoot, roots, folders)) {
       continue;
     }
     const range = new vscode.Range(

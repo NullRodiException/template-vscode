@@ -2,7 +2,7 @@
   "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
   "name": "Linx Liquid — Liquid em contextos aninhados",
   "scopeName": "linx-liquid.injection.liquid",
-  "injectionSelector": "L:text.html.linx-liquid -meta.embedded.block.raw.linx -comment.block.liquid",
+  "injectionSelector": "L:text.html.linx-liquid -meta.embedded.block.raw.linx -comment.block.liquid -string.quoted.single.liquid -string.quoted.double.liquid",
   "comment": [
     "As regras da gramática principal só alcançam o Liquid que está no nível do documento.",
     "Assim que o text.html.basic entra numa sub-regra — string de atributo, comentário HTML — ou",
@@ -14,7 +14,12 @@
     "  includes/PageHeader.template:72  {{ '…' | contentpath }} dentro de string JS",
     "Esta injeção reconhece Liquid em qualquer profundidade, fora de raw e fora de {% comment %}.",
     "raw/endraw/comment/endcomment ficam de fora do begin: são as tags que delimitam as regiões da",
-    "gramática principal, e capturá-las aqui impediria essas regiões de existir."
+    "gramática principal, e capturá-las aqui impediria essas regiões de existir.",
+    "Os dois -string.*.liquid do seletor mantêm a injeção fora das strings do próprio Liquid, onde",
+    "os delimitadores são texto: {{'{%'}} e {{'%}'}} são como o template escreve {% e %} literais",
+    "(Layout/Footer/index.template:2). Sem eles o {% de dentro da string abria uma tag que só",
+    "fechava no %} de uma string lá adiante, e o resto do arquivo inteiro herdava esse escopo —",
+    "a cor do HTML morria a partir dali."
   ],
   "patterns": [
     { "include": "#injected-tag" },

@@ -62,6 +62,42 @@ function isDirectory(target: string): boolean {
 const THEME_DIR = 'html';
 
 /**
+ * Nomes de pasta que, sozinhos, identificam a raiz de um tema.
+ *
+ * Num clone com vários temas lado a lado, é o nome da pasta que diz de qual
+ * tema o arquivo é — e é o que faz `{% include /Templates/… %}` de um arquivo
+ * de `Moda/` apontar para `Moda/` e não para o tema irmão. São os nomes que a
+ * Linx usa nos temas padrão; qualquer outro (`agrada-template-clean`, um tema
+ * com nome de cliente) entra por `linxLiquid.themeFolders`.
+ */
+export const DEFAULT_THEME_FOLDERS = [
+  THEME_DIR,
+  'Base',
+  'Default',
+  'Mobile',
+  'Moda',
+  'POS',
+  'Shared',
+  'agrada-template',
+];
+
+/**
+ * Compara o nome da pasta com um nome configurado, ignorando caixa e aceitando
+ * `*`.
+ *
+ * O `*` existe para a família de temas com sufixo — `agrada-template`,
+ * `agrada-template-clean`, `agrada-template-v2` — que de outro modo obrigaria a
+ * listar um por um.
+ */
+function matchesFolderName(name: string, pattern: string): boolean {
+  const source = pattern
+    .split('*')
+    .map((part) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
+    .join('.*');
+  return new RegExp(`^${source}$`, 'i').test(name);
+}
+
+/**
  * Pastas que denunciam a raiz de um tema que não tem `Pages/` nem `html/`.
  *
  * Sinal fraco de propósito: `Templates/` é nome comum demais para valer sozinho
@@ -92,29 +128,41 @@ function isInside(dir: string, roots: string[]): boolean {
  *    por exemplo — a raiz ainda é a `html/` irmã.
  *  - **repositório de temas** — um clone com vários temas irmãos na raiz
  *    (`Base/`, `Moda/`, `Shared/`, …), e parte deles sem `Pages/` nem `html/`.
- *    Aí o sinal é `Templates/`, `Components/` ou `Configs/`.
+ *    Aí o sinal é o **nome da pasta** (`themeFolders`, com os nomes padrão da
+ *    Linx mais o que estiver em `linxLiquid.themeFolders`) e, na falta dele,
+ *    `Templates/`, `Components/` ou `Configs/`.
  *
- * O sinal fraco tem duas amarras, porque sozinho ele erraria mais do que acerta:
+ * O nome da pasta é o que separa um tema do outro dentro do mesmo clone: sem
+ * ele, `Base/`, `Moda/` e `agrada-template-clean/` têm todas um `Templates/` e
+ * qualquer uma serviria de raiz para o arquivo de qualquer outra. Com ele, o
+ * include de um arquivo de `Moda/` conta de `Moda/`.
  *
- *  1. **Só vale dentro do workspace.** Acima da pasta aberta, uma `Templates/`
- *     é coincidência do disco de quem está editando, não raiz de tema. Sem
- *     `workspaceRoots` o sinal fraco nem é considerado, e a função responde
- *     exatamente o que respondia antes de existir.
+ * O sinal por nome e o sinal fraco têm as duas mesmas amarras, porque sozinhos
+ * eles errariam mais do que acertam:
+ *
+ *  1. **Só valem dentro do workspace.** Acima da pasta aberta, uma `Templates/`
+ *     — ou uma pasta que por acaso se chame `Default/` — é coincidência do
+ *     disco de quem está editando, não raiz de tema. Sem `workspaceRoots`
+ *     nenhum dos dois é considerado, e a função responde exatamente o que
+ *     respondia antes de eles existirem.
  *  2. **Vence o mais externo.** Dentro de `Base/` há `widgets/easy.checkout/`,
  *     que também tem `Templates/`; parar nele faria `{% include /Templates/… %}`
- *     contar da pasta errada. O sinal forte continua sendo o mais interno —
- *     `Pages/` só aparece na raiz de verdade.
+ *     contar da pasta errada. Pelo mesmo motivo, um `Shared/` dentro de `Base/`
+ *     não rouba a raiz do tema que o contém. O sinal forte continua sendo o
+ *     mais interno — `Pages/` só aparece na raiz de verdade.
  */
 export function findThemeRoot(
   fromPath: string,
   override?: string,
   workspaceRoots: string[] = [],
+  themeFolders: string[] = DEFAULT_THEME_FOLDERS,
 ): string | undefined {
   if (override) {
     return path.resolve(override);
   }
   const boundaries = workspaceRoots.map((root) => path.resolve(root));
   let dir = isDirectory(fromPath) ? fromPath : path.dirname(fromPath);
+  let named: string | undefined;
   let weak: string | undefined;
   for (let depth = 0; depth < 32; depth++) {
     if (isDirectory(path.join(dir, 'Pages')) || path.basename(dir).toLowerCase() === THEME_DIR) {
@@ -123,11 +171,12 @@ export function findThemeRoot(
     if (isDirectory(path.join(dir, THEME_DIR))) {
       return path.join(dir, THEME_DIR);
     }
-    if (
-      isInside(path.resolve(dir), boundaries) &&
-      WEAK_ROOT_DIRS.some((name) => isDirectory(path.join(dir, name)))
-    ) {
-      weak = dir;
+    if (isInside(path.resolve(dir), boundaries)) {
+      if (themeFolders.some((pattern) => matchesFolderName(path.basename(dir), pattern))) {
+        named = dir;
+      } else if (WEAK_ROOT_DIRS.some((name) => isDirectory(path.join(dir, name)))) {
+        weak = dir;
+      }
     }
     const parent = path.dirname(dir);
     if (parent === dir) {
@@ -135,7 +184,9 @@ export function findThemeRoot(
     }
     dir = parent;
   }
-  return weak;
+  // O nome da pasta é uma declaração de que ali é um tema; `Templates/` é só
+  // indício. Quando os dois aparecem em níveis diferentes, o nome decide.
+  return named ?? weak;
 }
 
 const FOLDER_ATTR_RE = /\bfolder\s*=\s*"([^"]*)"/i;
@@ -209,8 +260,9 @@ export function getThemeInfo(
   fromPath: string,
   override?: string,
   workspaceRoots: string[] = [],
+  themeFolders: string[] = DEFAULT_THEME_FOLDERS,
 ): ThemeInfo | undefined {
-  const root = findThemeRoot(fromPath, override, workspaceRoots);
+  const root = findThemeRoot(fromPath, override, workspaceRoots, themeFolders);
   if (!root) {
     return undefined;
   }
@@ -327,6 +379,7 @@ export function resolveIncludePath(
   fromFile: string,
   override?: string,
   extraRoots: string[] = [],
+  themeFolders: string[] = DEFAULT_THEME_FOLDERS,
 ): string | undefined {
   const fromDir = path.dirname(fromFile);
   const native = includePath.replace(/[/\\]/g, path.sep);
@@ -340,7 +393,7 @@ export function resolveIncludePath(
   // A barra inicial é da raiz do tema, não do sistema de arquivos: `path.resolve`
   // aqui apontaria para a raiz do drive.
   const relative = includePath.replace(/^[/\\]+/, '').replace(/[/\\]/g, path.sep);
-  const theme = getThemeInfo(fromFile, override, extraRoots);
+  const theme = getThemeInfo(fromFile, override, extraRoots, themeFolders);
   const roots = [...(theme ? [theme.root] : []), ...extraRoots, fromDir];
 
   const hit = firstExisting(
@@ -394,8 +447,9 @@ export function resolveThemePath(
   fromFile: string,
   override?: string,
   workspaceRoots: string[] = [],
+  themeFolders: string[] = DEFAULT_THEME_FOLDERS,
 ): string | undefined {
-  const theme = getThemeInfo(fromFile, override, workspaceRoots);
+  const theme = getThemeInfo(fromFile, override, workspaceRoots, themeFolders);
   if (!theme) {
     return undefined;
   }
@@ -418,8 +472,9 @@ export function resolveDeployPath(
   fromFile: string,
   override?: string,
   workspaceRoots: string[] = [],
+  themeFolders: string[] = DEFAULT_THEME_FOLDERS,
 ): string | undefined {
-  const theme = getThemeInfo(fromFile, override, workspaceRoots);
+  const theme = getThemeInfo(fromFile, override, workspaceRoots, themeFolders);
   const clean = deployPath.split('?')[0].replace(/\\/g, '/');
   const match = /(?:^|\/)Widgets\/([^/]+)\/(.+)$/.exec(clean);
   if (theme && match) {
@@ -446,8 +501,9 @@ export function findWidgetFor(
   filePath: string,
   override?: string,
   workspaceRoots: string[] = [],
+  themeFolders: string[] = DEFAULT_THEME_FOLDERS,
 ): WidgetInfo | undefined {
-  const theme = getThemeInfo(filePath, override, workspaceRoots);
+  const theme = getThemeInfo(filePath, override, workspaceRoots, themeFolders);
   if (!theme) {
     return undefined;
   }

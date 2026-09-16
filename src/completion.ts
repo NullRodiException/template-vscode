@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 
 import { findWidgetFor, findThemeRoot } from './core/theme.ts';
-import { themeRootFor, workspaceRootsFor, isOnDisk } from './config.ts';
+import { themeRootFor, workspaceRootsFor, themeFoldersFor, isOnDisk } from './config.ts';
 import { templateUris, referencedWidgetProperties } from './widgetIndex.ts';
 import {
   LINX_TAGS,
@@ -46,7 +46,9 @@ async function includeCompletions(document: vscode.TextDocument): Promise<vscode
   // Fora de um tema Linx a pasta do workspace faz o papel de raiz, igual ao que
   // `resolveIncludePath` usa para transformar esses caminhos em link.
   const roots = workspaceRootsFor(document);
-  const root = findThemeRoot(document.uri.fsPath, themeRootFor(document), roots) ?? roots[0];
+  const root =
+    findThemeRoot(document.uri.fsPath, themeRootFor(document), roots, themeFoldersFor(document)) ??
+    roots[0];
   if (!root) {
     return [];
   }
@@ -71,7 +73,12 @@ async function includeCompletions(document: vscode.TextDocument): Promise<vscode
 
 async function widgetCompletions(document: vscode.TextDocument): Promise<vscode.CompletionItem[]> {
   const widget = isOnDisk(document)
-    ? findWidgetFor(document.uri.fsPath, themeRootFor(document), workspaceRootsFor(document))
+    ? findWidgetFor(
+        document.uri.fsPath,
+        themeRootFor(document),
+        workspaceRootsFor(document),
+        themeFoldersFor(document),
+      )
     : undefined;
   const declared = new Map(widget?.properties.map((p) => [p.name, p]) ?? []);
   const referenced = await referencedWidgetProperties();
