@@ -782,7 +782,7 @@ function runPass(
 
     if (firstNonWs === -1) {
       // Linha em branco: a indentação residual some.
-      if (line.length > 0 && (!OPAQUE.has(kind) || columns.length > 0)) {
+      if (line.length > 0 && (!OPAQUE.has(kind) || (columns.length > 0 && kind !== 'liquid-comment'))) {
         edits.push({ line: ln, newIndent: '', oldIndentLength: line.length });
       }
       continue;
@@ -793,8 +793,10 @@ function runPass(
     // JavaScript parseável — há {% for %} gerando arrays JSON ali dentro —, então
     // nenhum formatador pode reorganizar aquilo. A exceção é o bloco JSON: ali o
     // conteúdo tem estrutura própria e reconhecida, e é o único caso em que uma
-    // linha de <script> é reindentada.
-    if (OPAQUE.has(kind) && !inJson(firstNonWs)) {
+    // linha de <script> é reindentada. O {% comment %} no meio de um bloco JSON
+    // continua opaco: o que está ali dentro não é o JSON que o servidor gera, e
+    // as chaves dele não podem abrir nível (paginas.json.template:9-14).
+    if (OPAQUE.has(kind) && (kind === 'liquid-comment' || !inJson(firstNonWs))) {
       continue;
     }
 

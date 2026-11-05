@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.1
+
+- **Comentar um item de um bloco JSON não desmancha mais a indentação do arquivo** — `{% comment %}` em volta de um objeto do meio do array (`Layout/Footer/JSON/paginas.json.template:9-14`) partia a região Liquid em duas no scanner, e a detecção de JSON só procurava o par do `[` dentro da mesma região: o array de fora deixava de fechar, deixava de ser JSON, e formatar mandava o arquivo inteiro para a margem — com só os pedaços menores, que fechavam antes do comentário, ainda indentados. Agora as regiões Liquid separadas apenas por `{% comment %}` são lidas como um trecho só, e o corpo do comentário é pulado no parse: as chaves e vírgulas do item comentado não contam, porque não são o JSON que o servidor gera. As tags `{% comment %}`/`{% endcomment %}` saem no nível dos itens vizinhos, e o conteúdo do comentário continua intocado, como em qualquer outro lugar.
+
 ## 0.10.0
 
 - **O `{%` escrito dentro de string do Liquid deixa de matar a cor do resto do arquivo** — `{{'{%'}} include /Layout/Footer/JSON/paginas.json {{'%}'}}` é como um template escreve uma tag literal para outro `{% capture %}` executar depois (`Layout/Footer/index.template:2`). A injeção que alcança o Liquid dentro de string de atributo e de comentário HTML alcançava também o interior das strings do próprio Liquid: o `{%` de dentro das aspas abria uma tag que só ia fechar no `%}` de outra string mais adiante, e dali até o fim do arquivo tudo herdava esse escopo — HTML, atributos e tags Liquid saíam todos com a cor de string. O seletor da injeção passa a excluir `string.quoted.single.liquid` e `string.quoted.double.liquid`, que é onde o delimitador é texto e não delimitador.

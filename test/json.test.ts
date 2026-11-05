@@ -85,6 +85,15 @@ describe('detecção de bloco JSON', () => {
     assert.deepEqual(blocks(text), []);
   });
 
+  test('o bloco atravessa {% comment %}, e o que está comentado não conta', () => {
+    // paginas.json.template:9-14. O item comentado tem `}` e `,` próprios; se
+    // contassem, um `{` sem par ali dentro desqualificaria o array inteiro.
+    const text = ['[', '{ "a": 1 },', '{% comment %}', '{ "b": [', '{% endcomment %}', '{ "c": 3 }', ']'].join(
+      '\n',
+    );
+    assert.deepEqual(blocks(text), [text]);
+  });
+
   test('dois blocos no mesmo arquivo saem em ordem e sem sobreposição', () => {
     const text = ['{', '"a": 1', '}', '<hr>', '[', '2,', '3', ']'].join('\n');
     const spans = findJsonSpans(text);

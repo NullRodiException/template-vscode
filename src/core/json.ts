@@ -43,11 +43,29 @@ const OPENERS: Record<string, string> = { '{': '}', '[': ']' };
  * JSON — o que inclui o caso de acabar a região antes de o último container
  * fechar.
  */
-function scanJsonValue(text: string, start: number, limit: number): number {
+function scanJsonValue(
+  text: string,
+  start: number,
+  limit: number,
+  comments: readonly Region[] = [],
+): number {
   const stack: string[] = [];
   let i = start;
+  let next = 0;
 
   while (i < limit) {
+    // O corpo de um `{% comment %}` não existe para o servidor: o JSON que sai
+    // dali é o de fora, e é ele que tem de fechar. paginas.json.template:9-14
+    // comenta um item do meio do array — com chaves e vírgula próprias, que não
+    // podem contar.
+    while (next < comments.length && comments[next].end <= i) {
+      next++;
+    }
+    if (next < comments.length && comments[next].start <= i) {
+      i = comments[next].end;
+      continue;
+    }
+
     const ch = text[i];
 
     // Liquid é opaco e pode aparecer em qualquer posição: no lugar do valor, da
@@ -145,13 +163,27 @@ function isMultiline(text: string, span: JsonSpan): boolean {
  * O candidato precisa **abrir a linha**: um `{` no meio de uma frase é texto, e
  * exigir isso corta de saída quase todo falso positivo antes mesmo do parse.
  */
-function bareSpans(text: string, region: Region, out: JsonSpan[]): void {
-  let i = region.start;
-  while (i < region.end) {
+function bareSpans(
+  text: string,
+  start: number,
+  limit: number,
+  comments: readonly Region[],
+  out: JsonSpan[],
+): void {
+  let i = start;
+  let next = 0;
+  while (i < limit) {
+    while (next < comments.length && comments[next].end <= i) {
+      next++;
+    }
+    if (next < comments.length && comments[next].start <= i) {
+      i = comments[next].end;
+      continue;
+    }
     const ch = text[i];
     if ((ch === '{' || ch === '[') && !text.startsWith('{{', i) && !text.startsWith('{%', i)) {
       if (startsLine(text, i)) {
-        const end = scanJsonValue(text, i, region.end);
+        const end = scanJsonValue(text, i, limit, comments);
         if (end !== -1) {
           const span = { start: i, end };
           if (isMultiline(text, span)) {
@@ -183,11 +215,26 @@ function scriptOpenTag(text: string, bodyStart: number): string {
 export function findJsonSpans(text: string, regions: Region[] = scan(text)): JsonSpan[] {
   const out: JsonSpan[] = [];
 
+  // Regiões `liquid` separadas só por `{% comment %}` são um trecho só: o
+  // comentário parte a região no scanner, mas não parte o JSON que a cerca.
+  let run: { start: number; end: number; comments: Region[] } | null = null;
+  const flush = (): void => {
+    if (run) {
+      bareSpans(text, run.start, run.end, run.comments, out);
+      run = null;
+    }
+  };
+
   for (const region of regions) {
-    if (region.kind === 'liquid') {
-      bareSpans(text, region, out);
+    if (region.kind === 'liquid' || region.kind === 'liquid-comment') {
+      run ??= { start: region.start, end: region.start, comments: [] };
+      run.end = region.end;
+      if (region.kind === 'liquid-comment') {
+        run.comments.push(region);
+      }
       continue;
     }
+    flush();
 
     if (region.kind === 'script' && JSON_MIME_RE.test(scriptOpenTag(text, region.start))) {
       const first = text.slice(region.start, region.end).search(/\S/);
@@ -204,6 +251,7 @@ export function findJsonSpans(text: string, regions: Region[] = scan(text)): Jso
       }
     }
   }
+  flush();
 
   return out;
 }

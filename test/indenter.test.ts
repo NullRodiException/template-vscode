@@ -440,6 +440,38 @@ describe('formatador — blocos JSON', () => {
     }
   });
 
+  test('{% comment %} no meio do array não desmancha o bloco', () => {
+    // paginas.json.template:9-14: comentar um item partia a região Liquid em
+    // duas, o `[` de fora deixava de fechar e o arquivo inteiro ia para a margem.
+    const source = [
+      '[',
+      '{',
+      '"Links": [',
+      '{ "Text": "a" },',
+      '{% comment %}',
+      '            { "Text": "b" },',
+      '{% endcomment %}',
+      '{ "Text": "c" }',
+      ']',
+      '}',
+      ']',
+    ].join('\n');
+
+    assert.deepEqual(formatText(source, TABS).split('\n'), [
+      '[',
+      '\t{',
+      '\t\t"Links": [',
+      '\t\t\t{ "Text": "a" },',
+      '\t\t\t{% comment %}',
+      '            { "Text": "b" },',
+      '\t\t\t{% endcomment %}',
+      '\t\t\t{ "Text": "c" }',
+      '\t\t]',
+      '\t}',
+      ']',
+    ]);
+  });
+
   test('objeto e array somam nível, e o fechamento volta ao da abertura', () => {
     const source = ['{', '"a": [', '1', '],', '"b": {', '"c": 2', '}', '}'].join('\n');
 
